@@ -63,7 +63,6 @@ void config(char mode, int type, char *data)
 
         char repLoc[DIRNAME_LEN];
         neogitReplocation(repLoc);
-        puts(repLoc);
         if (*repLoc != '\0')
         {
             strcat(repLoc, "\\localconfigs.neogit");
@@ -92,6 +91,7 @@ void config(char mode, int type, char *data)
         fprintf(localconfigs, "L");
         fseek(localconfigs, type * DATASTR_LEN, SEEK_CUR);
         fwrite(data, sizeof(char), DATASTR_LEN, localconfigs);
+        fclose(localconfigs);
 
         return;
     }
