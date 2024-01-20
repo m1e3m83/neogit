@@ -17,7 +17,7 @@ void neogitReplocation(char *);
 
 int main(int argc, char *argv[])
 {
-    if (strcmp(argv[1], "config") == 0)
+    if (strcmp(argv[1], "config") == 0 && (argc == 4 || argc == 5))
     {
         char mode = LOCAL;
         if (strcmp(argv[2], "-global") == 0)
