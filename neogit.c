@@ -13,6 +13,7 @@
 #define INVCMD puts("Invalid cmd :/")
 
 void config(char, int, char *);
+void gitReplocation(char *);
 
 int main(int argc, char *argv[])
 {
@@ -42,35 +43,6 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-// void config(char mode, char type, char *data)
-// {
-//     if (mode == GLOBAL)
-//     {
-
-//         // if in a project folder resets local configs
-//         unsigned long fileatt = GetFileAttributes(".neogit\\localconfigs.txt");
-//         if (fileatt != INVALID_FILE_ATTRIBUTES && fileatt != FILE_ATTRIBUTE_DIRECTORY)
-//         {
-//             FILE *localConfig = fopen(".neogit\\localconfigs.txt", "w");
-//             fputs("GLOBAL", localConfig);
-//             fclose(localConfig);
-//         }
-//     }
-//     else if (mode == LOCAL)
-//     {
-//         // check if the file exists
-//         if (GetFileAttributes(".neogit") != FILE_ATTRIBUTE_DIRECTORY)
-//         {
-//             fputs("ERROR: NOT IN A REPOSITORY FOLDER!", stdout);
-//             return;
-//         }
-
-//         // resets local configs
-//         FILE *localConfig = fopen(".neogit\\localconfigs.txt", "w");
-//         fprintf(localConfig, "LOCAL %s %s\n", username, email);
-//     }
-// }
-
 void config(char mode, int type, char *data)
 {
     if (mode == GLOBAL)
@@ -82,11 +54,45 @@ void config(char mode, int type, char *data)
         char *lastbs = strrchr(exefileDir, '\\');
         if (lastbs != NULL)
             *lastbs = '\0';
-        strcat(exefileDir, "\\configfile.txt");
+        strcat(exefileDir, "\\configfile.neogit");
 
         FILE *configFile = fopen(exefileDir, "r+");
         fseek(configFile, type * DATASTR_LEN, SEEK_SET);
         fwrite(data, sizeof(char), DATASTR_LEN, configFile);
         fclose(configFile);
+
+        char repLoc[DIRNAME_LEN];
+        gitReplocation(repLoc);
+        puts(repLoc);
+        if (*repLoc != '\0')
+        {
+            strcat(repLoc, "\\localconfigs.neogit");
+            FILE *localconfigs = fopen(repLoc, "r+");
+            if (localconfigs == NULL)
+            {
+                fprintf(stderr, "ERORR: LOCALCONFIGS NOT FOUND.");
+                return;
+            }
+            fprintf(localconfigs, "G");
+            fclose(localconfigs);
+        }
+        return;
     }
+}
+
+void gitReplocation(char *curLoc)
+{
+    GetCurrentDirectory(DIRNAME_LEN, curLoc);
+    while (1)
+    {
+        char *lastbs = strrchr(curLoc, '\\');
+        strcat(curLoc, "\\.neogit");
+        if (!(GetFileAttributes(curLoc) & FILE_ATTRIBUTE_DIRECTORY & FILE_ATTRIBUTE_HIDDEN))
+            return;
+        if (lastbs == NULL)
+            break;
+        *lastbs = '\0';
+    }
+    *curLoc = '\0';
+    return;
 }
