@@ -13,7 +13,7 @@
 #define INVCMD puts("Invalid cmd :/")
 
 void config(char, int, char *);
-void gitReplocation(char *);
+void neogitReplocation(char *);
 
 int main(int argc, char *argv[])
 {
@@ -62,7 +62,7 @@ void config(char mode, int type, char *data)
         fclose(configFile);
 
         char repLoc[DIRNAME_LEN];
-        gitReplocation(repLoc);
+        neogitReplocation(repLoc);
         puts(repLoc);
         if (*repLoc != '\0')
         {
@@ -78,16 +78,34 @@ void config(char mode, int type, char *data)
         }
         return;
     }
+    if (mode == LOCAL)
+    {
+        char reploc[DIRNAME_LEN];
+        neogitReplocation(reploc);
+        if (*reploc == '\0')
+        {
+            puts("ERROR: NOT IN A REPO FOLDER OR SUBFOLDER!");
+            return;
+        }
+        strcat(reploc, "\\localconfigs.neogit");
+        FILE *localconfigs = fopen(reploc, "r+");
+        fprintf(localconfigs, "L");
+        fseek(localconfigs, type * DATASTR_LEN, SEEK_CUR);
+        fwrite(data, sizeof(char), DATASTR_LEN, localconfigs);
+
+        return;
+    }
 }
 
-void gitReplocation(char *curLoc)
+void neogitReplocation(char *curLoc)
 {
     GetCurrentDirectory(DIRNAME_LEN, curLoc);
     while (1)
     {
+        puts(curLoc);
         char *lastbs = strrchr(curLoc, '\\');
         strcat(curLoc, "\\.neogit");
-        if (!(GetFileAttributes(curLoc) & FILE_ATTRIBUTE_DIRECTORY & FILE_ATTRIBUTE_HIDDEN))
+        if (GetFileAttributes(curLoc) != INVALID_FILE_ATTRIBUTES && (GetFileAttributes(curLoc) & FILE_ATTRIBUTE_DIRECTORY) && (GetFileAttributes(curLoc) & FILE_ATTRIBUTE_HIDDEN))
             return;
         if (lastbs == NULL)
             break;
