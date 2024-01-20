@@ -15,6 +15,7 @@
 void config(char, int, char *);
 void neogitReplocation(char *);
 void init();
+void add(char *);
 
 int main(int argc, char *argv[])
 {
@@ -42,6 +43,10 @@ int main(int argc, char *argv[])
     else if (strcmp(argv[1], "init") == 0 && argc == 2)
     {
         init();
+    }
+    else if (strcmp(argv[1], "add") == 0)
+    {
+        add(argv[2]);
     }
     else
         INVCMD;
@@ -153,9 +158,9 @@ void init()
 
 void add(char *fileName)
 {
-    char neogitLoc[DIRNAME_LEN];
-    neogitReplocation(neogitLoc);
-    if (*neogitLoc == '\0')
+    char dir[DIRNAME_LEN];
+    neogitReplocation(dir);
+    if (*dir == '\0')
     {
         puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
         return;
@@ -191,42 +196,38 @@ void add(char *fileName)
     else
     {
         // reading current branch
-        strcat(neogitLoc, "\\status");
-        FILE *status = fopen(neogitLoc, "r");
+        strcat(dir, "\\status.neogit");
+        FILE *status = fopen(dir, "r");
         char branch[DATASTR_LEN];
         fread(branch, 1, DATASTR_LEN, status);
         fclose(status);
-        // reseting neogitloc to original loc
-        char *lastbs = strrchr(neogitLoc, '\\');
+
+        // reseting dir to original loc
+        char *lastbs = strrchr(dir, '\\');
         *lastbs = '\0';
+
         // moving to the branch staged folder
-        strcat(neogitLoc, branch);
-        strcat(neogitLoc, "\\staged\\stagedfiles.neogit");
+        strcat(dir, branch);
+        strcat(dir, "\\staged\\stagedfiles.neogit");
 
         // reading staged files num
-        FILE *staged = fopen(neogitLoc, "r+");
+        FILE *staged = fopen(dir, "r+");
         int stagedCount;
-        fread(stagedCount, sizeof(int), 1, staged);
+        fread(&stagedCount, sizeof(int), 1, staged);
         stagedCount++;
         rewind(staged);
         fwrite(&stagedCount, sizeof(int), 1, staged);
         fclose(staged);
+
+        // going back to staged dir
+        lastbs = strrchr(dir, '\\');
+        *lastbs = '\0';
+
         char stagedCountStr[DATASTR_LEN];
         itoa(stagedCount, stagedCountStr, 10);
-        // going back to staged dir
-        lastbs = strrchr(neogitLoc, '\\');
-        *lastbs = '\0';
-
-        strcat(neogitLoc, "\\");
-        strcat(neogitLoc, stagedCountStr);
-        CreateDirectory(neogitLoc, NULL);
-        strcat(neogitLoc, "\\filedata.neogit");
-        FILE *filedata = fopen(neogitLoc, "w");
-        fwrite(fileName, 1, DIRNAME_LEN, filedata);
-        fclose(filedata);
-
-        lastbs = strrchr(neogitLoc, '\\');
-        *lastbs = '\0';
+        strcat(dir, "\\");
+        strcat(dir, stagedCountStr);
+        CreateDirectory(dir, NULL);
 
         // adding the full address to the file name
         char curdir[DIRNAME_LEN];
@@ -234,5 +235,18 @@ void add(char *fileName)
         strcat(curdir, "\\");
         strcat(curdir, fileName);
         strcpy(fileName, curdir);
+
+                strcat(dir, "\\filedata.neogit");
+        FILE *filedata = fopen(dir, "w");
+        fwrite(fileName, 1, DIRNAME_LEN, filedata);
+        fclose(filedata);
+
+        lastbs = strrchr(dir, '\\');
+        *lastbs = '\0';
+
+        // copy file from original directory to staged folder
+        lastbs = strrchr(fileName, '\\');
+        strcat(dir, lastbs);
+        CopyFile(fileName, dir, 0);
     }
 }
