@@ -14,6 +14,7 @@
 
 void config(char, int, char *);
 void neogitReplocation(char *);
+void init();
 
 int main(int argc, char *argv[])
 {
@@ -36,6 +37,10 @@ int main(int argc, char *argv[])
             config(LOCAL, EMAIL, argv[3]);
         else
             INVCMD;
+    }
+    else if (strcmp(argv[1], "init") == 0 && argc == 2)
+    {
+        init();
     }
     else
         INVCMD;
@@ -112,4 +117,21 @@ void neogitReplocation(char *curLoc)
     }
     *curLoc = '\0';
     return;
+}
+
+void init()
+{
+    char reploc[DIRNAME_LEN];
+    neogitReplocation(reploc);
+    if (*reploc != '\0')
+    {
+        puts("ERROR: A NEOGIT REPO ALREADY EXISTS IN THIS PAHT.");
+        return;
+    }
+    CreateDirectory(".neogit", NULL);
+    SetFileAttributes(".neogit", FILE_ATTRIBUTE_HIDDEN);
+    FILE *localconfigs = fopen(".neogit\\localconfigs.neogit", "w");
+    fprintf(localconfigs, "G");
+    fclose(localconfigs);
+    puts("Initializing neogit repo in this directory.");
 }
