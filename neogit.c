@@ -18,6 +18,7 @@ void init();
 
 int main(int argc, char *argv[])
 {
+    // build a func to check for diff in staged files
     if (strcmp(argv[1], "config") == 0 && (argc == 4 || argc == 5))
     {
         char mode = LOCAL;
@@ -128,10 +129,110 @@ void init()
         puts("ERROR: A NEOGIT REPO ALREADY EXISTS IN THIS PAHT.");
         return;
     }
+
     CreateDirectory(".neogit", NULL);
     SetFileAttributes(".neogit", FILE_ATTRIBUTE_HIDDEN);
+
     FILE *localconfigs = fopen(".neogit\\localconfigs.neogit", "w");
     fprintf(localconfigs, "G");
     fclose(localconfigs);
     puts("Initializing neogit repo in this directory.");
+
+    FILE *status = fopen(".neogit\\status.neogit", "w");
+    char branch[DATASTR_LEN] = "\\main";
+    fwrite(branch, 1, DATASTR_LEN, status);
+    fclose(status);
+
+    CreateDirectory(".neogit\\main", NULL);
+    CreateDirectory(".neogit\\main\\staged", NULL);
+    FILE *staged = fopen(".neogit\\main\\staged\\stagedfiles.neogit", "w");
+    int a = 0;
+    fwrite(&a, sizeof(int), 1, staged);
+    fclose(staged);
+}
+
+void add(char *fileName)
+{
+    char neogitLoc[DIRNAME_LEN];
+    neogitReplocation(neogitLoc);
+    if (*neogitLoc == '\0')
+    {
+        puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
+        return;
+    }
+
+    if (GetFileAttributes(fileName) == INVALID_FILE_ATTRIBUTES)
+    {
+        puts("ERROR: INVALID FILE OR DIRECTORY PATH:");
+        puts(fileName);
+    }
+    else if (GetFileAttributes(fileName) == FILE_ATTRIBUTE_DIRECTORY)
+    {
+        strcat(fileName, "\\*");
+        WIN32_FIND_DATA findFileData;
+        HANDLE hFind = FindFirstFile(fileName, &findFileData);
+        FindNextFile(hFind, &findFileData);
+        while (FindNextFile(hFind, &findFileData) != 0)
+        {
+            if (hFind == NULL)
+            {
+                puts("ERROR: INVALID FILE OR DIRECTORY PATH:");
+                puts(fileName);
+                continue;
+            }
+            char path[DIRNAME_LEN];
+            strcpy(path, fileName);
+            strcat(path, "\\");
+            strcat(path, findFileData.cFileName);
+            add(path);
+        }
+        FindClose(hFind);
+    }
+    else
+    {
+        // reading current branch
+        strcat(neogitLoc, "\\status");
+        FILE *status = fopen(neogitLoc, "r");
+        char branch[DATASTR_LEN];
+        fread(branch, 1, DATASTR_LEN, status);
+        fclose(status);
+        // reseting neogitloc to original loc
+        char *lastbs = strrchr(neogitLoc, '\\');
+        *lastbs = '\0';
+        // moving to the branch staged folder
+        strcat(neogitLoc, branch);
+        strcat(neogitLoc, "\\staged\\stagedfiles.neogit");
+
+        // reading staged files num
+        FILE *staged = fopen(neogitLoc, "r+");
+        int stagedCount;
+        fread(stagedCount, sizeof(int), 1, staged);
+        stagedCount++;
+        rewind(staged);
+        fwrite(&stagedCount, sizeof(int), 1, staged);
+        fclose(staged);
+        char stagedCountStr[DATASTR_LEN];
+        itoa(stagedCount, stagedCountStr, 10);
+        // going back to staged dir
+        lastbs = strrchr(neogitLoc, '\\');
+        *lastbs = '\0';
+
+        strcat(neogitLoc, "\\");
+        strcat(neogitLoc, stagedCountStr);
+        CreateDirectory(neogitLoc, NULL);
+        strcat(neogitLoc, "\\filedata.neogit");
+        FILE *filedata = fopen(neogitLoc, "w");
+        fwrite(fileName, 1, DIRNAME_LEN, filedata);
+        fclose(filedata);
+
+        lastbs = strrchr(neogitLoc, '\\');
+        *lastbs = '\0';
+
+        // adding the full address to the file name
+        char curdir[DIRNAME_LEN];
+        GetCurrentDirectory(DIRNAME_LEN, curdir);
+        strcat(curdir, "\\");
+        strcat(curdir, fileName);
+        strcpy(fileName, curdir);
+    }
 }
