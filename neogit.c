@@ -102,7 +102,6 @@ void neogitReplocation(char *curLoc)
     GetCurrentDirectory(DIRNAME_LEN, curLoc);
     while (1)
     {
-        puts(curLoc);
         char *lastbs = strrchr(curLoc, '\\');
         strcat(curLoc, "\\.neogit");
         if (GetFileAttributes(curLoc) != INVALID_FILE_ATTRIBUTES && (GetFileAttributes(curLoc) & FILE_ATTRIBUTE_DIRECTORY) && (GetFileAttributes(curLoc) & FILE_ATTRIBUTE_HIDDEN))
