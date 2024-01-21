@@ -8,7 +8,7 @@
 #define EMAIL 1
 #define USER 0
 #define DATASTR_LEN 50
-#define DIRNAME_LEN 100
+#define DIRNAME_LEN 128
 
 #define INVCMD puts("Invalid cmd :/")
 
@@ -144,15 +144,13 @@ void init()
     puts("Initializing neogit repo in this directory.");
 
     FILE *status = fopen(".neogit\\status.neogit", "w");
-    char branch[DATASTR_LEN] = "\\main";
+    char branch[DATASTR_LEN] = "main";
     fwrite(branch, 1, DATASTR_LEN, status);
     fclose(status);
 
     CreateDirectory(".neogit\\main", NULL);
     CreateDirectory(".neogit\\main\\staged", NULL);
     FILE *staged = fopen(".neogit\\main\\staged\\stagedfiles.neogit", "w");
-    int a = 0;
-    fwrite(&a, sizeof(int), 1, staged);
     fclose(staged);
 }
 
@@ -171,7 +169,7 @@ void add(char *fileName)
         puts("ERROR: INVALID FILE OR DIRECTORY PATH:");
         puts(fileName);
     }
-    else if (GetFileAttributes(fileName) == FILE_ATTRIBUTE_DIRECTORY)
+    else if (GetFileAttributes(fileName) & FILE_ATTRIBUTE_DIRECTORY)
     {
         strcat(fileName, "\\*");
         WIN32_FIND_DATA findFileData;
@@ -187,7 +185,8 @@ void add(char *fileName)
             }
             char path[DIRNAME_LEN];
             strcpy(path, fileName);
-            strcat(path, "\\");
+            char *lastbs = strrchr(path, '\\');
+            lastbs[1] = '\0';
             strcat(path, findFileData.cFileName);
             add(path);
         }
@@ -195,58 +194,22 @@ void add(char *fileName)
     }
     else
     {
-        // reading current branch
+        char filedir[DIRNAME_LEN];
+        GetCurrentDirectory(DIRNAME_LEN, filedir);
+        strcat(filedir, "\\");
+        strcat(filedir, fileName);
+
         strcat(dir, "\\status.neogit");
         FILE *status = fopen(dir, "r");
         char branch[DATASTR_LEN];
         fread(branch, 1, DATASTR_LEN, status);
         fclose(status);
-
-        // reseting dir to original loc
         char *lastbs = strrchr(dir, '\\');
-        *lastbs = '\0';
-
-        // moving to the branch staged folder
-        strcat(dir, branch);
+        strcpy(lastbs + 1, branch);
         strcat(dir, "\\staged\\stagedfiles.neogit");
 
-        // reading staged files num
-        FILE *staged = fopen(dir, "r+");
-        int stagedCount;
-        fread(&stagedCount, sizeof(int), 1, staged);
-        stagedCount++;
-        rewind(staged);
-        fwrite(&stagedCount, sizeof(int), 1, staged);
-        fclose(staged);
-
-        // going back to staged dir
-        lastbs = strrchr(dir, '\\');
-        *lastbs = '\0';
-
-        char stagedCountStr[DATASTR_LEN];
-        itoa(stagedCount, stagedCountStr, 10);
-        strcat(dir, "\\");
-        strcat(dir, stagedCountStr);
-        CreateDirectory(dir, NULL);
-
-        // adding the full address to the file name
-        char curdir[DIRNAME_LEN];
-        GetCurrentDirectory(DIRNAME_LEN, curdir);
-        strcat(curdir, "\\");
-        strcat(curdir, fileName);
-        strcpy(fileName, curdir);
-
-                strcat(dir, "\\filedata.neogit");
-        FILE *filedata = fopen(dir, "w");
-        fwrite(fileName, 1, DIRNAME_LEN, filedata);
-        fclose(filedata);
-
-        lastbs = strrchr(dir, '\\');
-        *lastbs = '\0';
-
-        // copy file from original directory to staged folder
-        lastbs = strrchr(fileName, '\\');
-        strcat(dir, lastbs);
-        CopyFile(fileName, dir, 0);
+        FILE *stagedfiles = fopen(dir, "a");
+        fwrite(&filedir, 1, DIRNAME_LEN, stagedfiles);
+        fclose(stagedfiles);
     }
 }
