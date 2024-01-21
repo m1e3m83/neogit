@@ -60,6 +60,48 @@ int main(int argc, char *argv[])
         else
             add(argv[2], '\0');
     }
+    else if (strcmp(argv[1], "reset") == 0 && argc > 2)
+    {
+        if (strcmp(argv[2], "-f") == 0 && argc > 3)
+        {
+            for (int i = 3; i < argc; i++)
+            {
+                strtok(argv[i], "\\");
+
+                WIN32_FIND_DATA findFileData;
+                HANDLE hFind = FindFirstFile(argv[i], &findFileData);
+
+                if (hFind == NULL)
+                    puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
+                else
+                {
+                    do
+                    {
+                        reset(findFileData.cFileName);
+                    } while (FindNextFile(hFind, &findFileData) != 0);
+                }
+            }
+            resetfs();
+        }
+        else
+        {
+            strtok(argv[2], "\\");
+
+            WIN32_FIND_DATA findFileData;
+            HANDLE hFind = FindFirstFile(argv[2], &findFileData);
+
+            if (hFind == NULL)
+                puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
+            else
+            {
+                do
+                {
+                    reset(findFileData.cFileName);
+                } while (FindNextFile(hFind, &findFileData) != 0);
+            }
+            resetfs();
+        }
+    }
     else
         INVCMD;
 
@@ -324,12 +366,37 @@ void reset(char *fileName)
         char branch[DATASTR_LEN];
         fread(branch, 1, DATASTR_LEN, status);
         fclose(status);
+
         char *lastbs = strrchr(dir, '\\');
         strcpy(lastbs + 1, branch);
         strcat(dir, "\\staged\\stagedfiles.neogit");
 
         FILE *stagedfiles = fopen(dir, "r+");
         fseek(stagedfiles, d * DIRNAME_LEN, SEEK_SET);
-        fwrite()
+        fwrite(EMPTY_STRING, 1, DIRNAME_LEN, stagedfiles);
+        fclose(stagedfiles);
+
+        char *lastbs = strrchr(dir, '\\');
+        strcpy(lastbs + 1, "resetfiles.neogit");
+        FILE *resetfiles = fopen(dir, "a");
+        fwrite(filedir, 1, DIRNAME_LEN, resetfiles);
+        fclose(resetfiles);
     }
+}
+
+void resetfs()
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    strcat(dir, "\\status.neogit");
+    FILE *status = fopen(dir, "r");
+    char branch[DATASTR_LEN];
+    fread(branch, 1, DATASTR_LEN, status);
+    fclose(status);
+    char *lastbs = strrchr(dir, '\\');
+    strcpy(lastbs + 1, branch);
+    strcat(dir, "\\staged\\resetfiles.neogit");
+    FILE *resetfiles = fopen(dir, "a");
+    fwrite(EMPTY_STRING, 1, DIRNAME_LEN, resetfiles);
+    fclose(resetfiles);
 }
