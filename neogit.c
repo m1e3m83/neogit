@@ -47,7 +47,13 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[1], "add") == 0)
     {
-        add(argv[2]);
+        if (strcmp(argv[2], "-f") == 0)
+        {
+            for (int i = 3; i < argc; i++)
+                add(argv[i]);
+        }
+        else
+            add(argv[2]);
     }
     else
         INVCMD;
