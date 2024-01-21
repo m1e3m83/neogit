@@ -13,9 +13,10 @@
 #define INVCMD puts("Invalid cmd :/")
 
 void config(char, int, char *);
-void neogitReplocation(char *);
+void findNeogitRep(char *);
 void init();
 void add(char *);
+int checkstaged(char *);
 
 int main(int argc, char *argv[])
 {
@@ -58,7 +59,7 @@ void config(char mode, int type, char *data)
 {
     if (mode == GLOBAL)
     {
-        // updates configFile.txt in main dir
+        // updates configFile.neogit in main dir
         char exefileDir[DIRNAME_LEN];
 
         GetModuleFileName(NULL, exefileDir, DIRNAME_LEN);
@@ -73,7 +74,7 @@ void config(char mode, int type, char *data)
         fclose(configFile);
 
         char repLoc[DIRNAME_LEN];
-        neogitReplocation(repLoc);
+        findNeogitRep(repLoc);
         if (*repLoc != '\0')
         {
             strcat(repLoc, "\\localconfigs.neogit");
@@ -91,7 +92,7 @@ void config(char mode, int type, char *data)
     if (mode == LOCAL)
     {
         char reploc[DIRNAME_LEN];
-        neogitReplocation(reploc);
+        findNeogitRep(reploc);
         if (*reploc == '\0')
         {
             puts("ERROR: NOT IN A REPO FOLDER OR SUBFOLDER!");
@@ -108,7 +109,7 @@ void config(char mode, int type, char *data)
     }
 }
 
-void neogitReplocation(char *curLoc)
+void findNeogitRep(char *curLoc)
 {
     GetCurrentDirectory(DIRNAME_LEN, curLoc);
     while (1)
@@ -128,7 +129,7 @@ void neogitReplocation(char *curLoc)
 void init()
 {
     char reploc[DIRNAME_LEN];
-    neogitReplocation(reploc);
+    findNeogitRep(reploc);
     if (*reploc != '\0')
     {
         puts("ERROR: A NEOGIT REPO ALREADY EXISTS IN THIS PAHT.");
@@ -150,14 +151,14 @@ void init()
 
     CreateDirectory(".neogit\\main", NULL);
     CreateDirectory(".neogit\\main\\staged", NULL);
-    FILE *staged = fopen(".neogit\\main\\staged\\stagedfiles.neogit", "w");
+    FILE *staged = fopen(".\\main\\staged\\stagedfiles.neogit", "w");
     fclose(staged);
 }
 
 void add(char *fileName)
 {
     char dir[DIRNAME_LEN];
-    neogitReplocation(dir);
+    findNeogitRep(dir);
     if (*dir == '\0')
     {
         puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
@@ -208,8 +209,42 @@ void add(char *fileName)
         strcpy(lastbs + 1, branch);
         strcat(dir, "\\staged\\stagedfiles.neogit");
 
-        FILE *stagedfiles = fopen(dir, "a");
-        fwrite(&filedir, 1, DIRNAME_LEN, stagedfiles);
-        fclose(stagedfiles);
+        if (checkstaged(filedir) == -1)
+        {
+            FILE *stagedfiles = fopen(dir, "a");
+            fseek(stagedfiles, 0, SEEK_END);
+            fwrite(&filedir, 1, DIRNAME_LEN, stagedfiles);
+            fclose(stagedfiles);
+        }
+        else
+            puts("file(s) already staged.");
     }
+}
+
+int checkstaged(char *filedir)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    strcat(dir, "\\status.neogit");
+    FILE *status = fopen(dir, "r");
+    char branch[DATASTR_LEN];
+    fread(branch, 1, DATASTR_LEN, status);
+    fclose(status);
+    char *lastbs = strrchr(dir, '\\');
+    strcpy(lastbs + 1, branch);
+    strcat(dir, "\\staged\\stagedfiles.neogit");
+
+    FILE *stagedfiles = fopen(dir, "r");
+    if (stagedfiles == NULL)
+        puts("ERROR: COULD NOT OPEN SOME FILES!");
+    int d = 0;
+    char stagedfiledir[DIRNAME_LEN];
+    while (fread(stagedfiledir, 1, DIRNAME_LEN, stagedfiles))
+    {
+        if (strcmp(filedir, stagedfiledir) == 0)
+            return d;
+        d++;
+        fseek(stagedfiles, d * DIRNAME_LEN, SEEK_SET);
+    }
+    return -1;
 }
