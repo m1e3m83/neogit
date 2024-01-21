@@ -241,8 +241,6 @@ int checkstaged(char *filedir)
     strcat(dir, "\\staged\\stagedfiles.neogit");
 
     FILE *stagedfiles = fopen(dir, "r");
-    if (stagedfiles == NULL)
-        puts("ERROR: COULD NOT OPEN SOME FILES!");
     int d = 0;
     char stagedfiledir[DIRNAME_LEN];
     while (fread(stagedfiledir, 1, DIRNAME_LEN, stagedfiles))
