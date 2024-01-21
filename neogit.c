@@ -50,14 +50,60 @@ int main(int argc, char *argv[])
         if (strcmp(argv[2], "-f") == 0)
         {
             for (int i = 3; i < argc; i++)
-                add(argv[i], '\0');
+            {
+                if (strrchr(argv[i], '*') == NULL)
+                    add(argv[i], '\0');
+                else
+                {
+                    WIN32_FIND_DATA findFileData;
+                    HANDLE hFind = FindFirstFile(argv[i], &findFileData);
+
+                    if (hFind == NULL)
+                        puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
+                    else
+                        do
+                        {
+                            add(findFileData.cFileName, '\0');
+                        } while (FindNextFile(hFind, &findFileData) != 0);
+                }
+            }
         }
         else if (strcmp(argv[2], "-n") == 0)
         {
-            add(argv[3], 'n');
+            if (strrchr(argv[3], '*') == NULL)
+                add(argv[3], '\0');
+            else
+            {
+                WIN32_FIND_DATA findFileData;
+                HANDLE hFind = FindFirstFile(argv[3], &findFileData);
+
+                if (hFind == NULL)
+                    puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
+                else
+                    do
+                    {
+                        add(findFileData.cFileName, '\0');
+                    } while (FindNextFile(hFind, &findFileData) != 0);
+            }
         }
         else
-            add(argv[2], '\0');
+        {
+            if (strrchr(argv[2], '*') == NULL)
+                add(argv[2], '\0');
+            else
+            {
+                WIN32_FIND_DATA findFileData;
+                HANDLE hFind = FindFirstFile(argv[2], &findFileData);
+
+                if (hFind == NULL)
+                    puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
+                else
+                    do
+                    {
+                        add(findFileData.cFileName, '\0');
+                    } while (FindNextFile(hFind, &findFileData) != 0);
+            }
+        }
     }
     else
         INVCMD;
