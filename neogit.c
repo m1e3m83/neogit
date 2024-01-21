@@ -9,6 +9,7 @@
 #define USER 0
 #define DATASTR_LEN 50
 #define DIRNAME_LEN 128
+#define EMPTY_STRING "THIS IS AN EMPTY STRING DESIGNED TO AND REWRITE THE ORIGINAL STRING THAT LAY IN HERE. RIP OLD STRING, ALL HAIL THE NEW STRING!"
 
 #define INVCMD puts("Invalid cmd :/")
 
@@ -263,4 +264,72 @@ int checkstaged(char *filedir)
         fseek(stagedfiles, d * DIRNAME_LEN, SEEK_SET);
     }
     return -1;
+}
+
+void reset(char *fileName)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
+        return;
+    }
+
+    if (GetFileAttributes(fileName) == INVALID_FILE_ATTRIBUTES)
+    {
+        puts("ERROR: INVALID FILE OR DIRECTORY PATH:");
+        puts(fileName);
+    }
+    else if (GetFileAttributes(fileName) & FILE_ATTRIBUTE_DIRECTORY)
+    {
+        strcat(fileName, "\\*");
+        WIN32_FIND_DATA findFileData;
+        HANDLE hFind = FindFirstFile(fileName, &findFileData);
+        FindNextFile(hFind, &findFileData);
+        while (FindNextFile(hFind, &findFileData) != 0)
+        {
+            if (hFind == NULL)
+            {
+                puts("ERROR: INVALID FILE OR DIRECTORY PATH:");
+                puts(fileName);
+                continue;
+            }
+            char path[DIRNAME_LEN];
+            strcpy(path, fileName);
+            char *lastbs = strrchr(path, '\\');
+            lastbs[1] = '\0';
+            strcat(path, findFileData.cFileName);
+            reset(fileName);
+        }
+        FindClose(hFind);
+    }
+    else
+    {
+        char filedir[DIRNAME_LEN];
+        GetCurrentDirectory(DIRNAME_LEN, filedir);
+        strcat(filedir, "\\");
+        strcat(filedir, fileName);
+
+        int d = checkstaged(filedir);
+
+        if (d == -1)
+        {
+            puts("ERROR: NOT AN STAGED FILE!");
+            return;
+        }
+
+        strcat(dir, "\\status.neogit");
+        FILE *status = fopen(dir, "r");
+        char branch[DATASTR_LEN];
+        fread(branch, 1, DATASTR_LEN, status);
+        fclose(status);
+        char *lastbs = strrchr(dir, '\\');
+        strcpy(lastbs + 1, branch);
+        strcat(dir, "\\staged\\stagedfiles.neogit");
+
+        FILE *stagedfiles = fopen(dir, "r+");
+        fseek(stagedfiles, d * DIRNAME_LEN, SEEK_SET);
+        fwrite()
+    }
 }
