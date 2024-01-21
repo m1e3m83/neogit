@@ -18,6 +18,8 @@ void findNeogitRep(char *);
 void init();
 void add(char *, char);
 int checkstaged(char *);
+void reset(char *);
+void resetfs();
 
 int main(int argc, char *argv[])
 {
@@ -66,7 +68,7 @@ int main(int argc, char *argv[])
         {
             for (int i = 3; i < argc; i++)
             {
-                strtok(argv[i], "\\");
+                strtok(argv[i], "$");
 
                 WIN32_FIND_DATA findFileData;
                 HANDLE hFind = FindFirstFile(argv[i], &findFileData);
@@ -85,7 +87,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            strtok(argv[2], "\\");
+            strtok(argv[2], "$");
 
             WIN32_FIND_DATA findFileData;
             HANDLE hFind = FindFirstFile(argv[2], &findFileData);
@@ -342,7 +344,7 @@ void reset(char *fileName)
             char *lastbs = strrchr(path, '\\');
             lastbs[1] = '\0';
             strcat(path, findFileData.cFileName);
-            reset(fileName);
+            reset(path);
         }
         FindClose(hFind);
     }
@@ -376,7 +378,7 @@ void reset(char *fileName)
         fwrite(EMPTY_STRING, 1, DIRNAME_LEN, stagedfiles);
         fclose(stagedfiles);
 
-        char *lastbs = strrchr(dir, '\\');
+        lastbs = strrchr(dir, '\\');
         strcpy(lastbs + 1, "resetfiles.neogit");
         FILE *resetfiles = fopen(dir, "a");
         fwrite(filedir, 1, DIRNAME_LEN, resetfiles);
