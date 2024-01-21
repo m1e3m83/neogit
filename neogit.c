@@ -15,7 +15,7 @@
 void config(char, int, char *);
 void findNeogitRep(char *);
 void init();
-void add(char *);
+void add(char *, char);
 int checkstaged(char *);
 
 int main(int argc, char *argv[])
@@ -50,10 +50,14 @@ int main(int argc, char *argv[])
         if (strcmp(argv[2], "-f") == 0)
         {
             for (int i = 3; i < argc; i++)
-                add(argv[i]);
+                add(argv[i], '\0');
+        }
+        else if (strcmp(argv[2], "-n") == 0)
+        {
+            add(argv[3], 'n');
         }
         else
-            add(argv[2]);
+            add(argv[2], '\0');
     }
     else
         INVCMD;
@@ -161,7 +165,7 @@ void init()
     fclose(staged);
 }
 
-void add(char *fileName)
+void add(char *fileName, char mode)
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
@@ -195,7 +199,7 @@ void add(char *fileName)
             char *lastbs = strrchr(path, '\\');
             lastbs[1] = '\0';
             strcat(path, findFileData.cFileName);
-            add(path);
+            add(path, mode);
         }
         FindClose(hFind);
     }
@@ -215,15 +219,23 @@ void add(char *fileName)
         strcpy(lastbs + 1, branch);
         strcat(dir, "\\staged\\stagedfiles.neogit");
 
-        if (checkstaged(filedir) == -1)
+        if (mode == 'n')
+        {
+            printf(" %s : ", fileName);
+            if (checkstaged(filedir) == -1)
+            {
+                puts("not staged");
+            }
+            else
+                puts("staged");
+        }
+        else if (checkstaged(filedir) == -1)
         {
             FILE *stagedfiles = fopen(dir, "a");
             fseek(stagedfiles, 0, SEEK_END);
             fwrite(&filedir, 1, DIRNAME_LEN, stagedfiles);
             fclose(stagedfiles);
         }
-        else
-            puts("file(s) already staged.");
     }
 }
 
