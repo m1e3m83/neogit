@@ -20,7 +20,6 @@ int checkstaged(char *);
 
 int main(int argc, char *argv[])
 {
-    // build a func to check for diff in staged files
     if (strcmp(argv[1], "config") == 0 && (argc == 4 || argc == 5))
     {
         char mode = LOCAL;
@@ -45,63 +44,59 @@ int main(int argc, char *argv[])
     {
         init();
     }
-    else if (strcmp(argv[1], "add") == 0)
+    else if (strcmp(argv[1], "add") == 0 && argc > 2)
     {
         if (strcmp(argv[2], "-f") == 0)
         {
             for (int i = 3; i < argc; i++)
             {
-                if (strrchr(argv[i], '*') == NULL)
-                    add(argv[i], '\0');
+                strtok(argv[i], "\\");
+
+                WIN32_FIND_DATA findFileData;
+                HANDLE hFind = FindFirstFile(argv[i], &findFileData);
+
+                if (hFind == NULL)
+                    puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
                 else
                 {
-                    WIN32_FIND_DATA findFileData;
-                    HANDLE hFind = FindFirstFile(argv[i], &findFileData);
-
-                    if (hFind == NULL)
-                        puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
-                    else
-                        do
-                        {
-                            add(findFileData.cFileName, '\0');
-                        } while (FindNextFile(hFind, &findFileData) != 0);
+                    do
+                    {
+                        add(findFileData.cFileName, '\0');
+                    } while (FindNextFile(hFind, &findFileData) != 0);
                 }
             }
         }
         else if (strcmp(argv[2], "-n") == 0)
         {
-            if (strrchr(argv[3], '*') == NULL)
-                add(argv[3], '\0');
+            strtok(argv[3], "\\");
+
+            WIN32_FIND_DATA findFileData;
+            HANDLE hFind = FindFirstFile(argv[3], &findFileData);
+            if (hFind == NULL)
+                puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
             else
             {
-                WIN32_FIND_DATA findFileData;
-                HANDLE hFind = FindFirstFile(argv[3], &findFileData);
-
-                if (hFind == NULL)
-                    puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
-                else
-                    do
-                    {
-                        add(findFileData.cFileName, '\0');
-                    } while (FindNextFile(hFind, &findFileData) != 0);
+                do
+                {
+                    add(findFileData.cFileName, 'n');
+                } while (FindNextFile(hFind, &findFileData) != 0);
             }
         }
         else
         {
-            if (strrchr(argv[2], '*') == NULL)
-                add(argv[2], '\0');
+            strtok(argv[2], "\\");
+
+            WIN32_FIND_DATA findFileData;
+            HANDLE hFind = FindFirstFile(argv[2], &findFileData);
+
+            if (hFind == NULL)
+                puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
             else
             {
-                WIN32_FIND_DATA findFileData;
-                HANDLE hFind = FindFirstFile(argv[2], &findFileData);
-
-                if (hFind == NULL)
-                    puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
-                else
-                    do
-                    {
-                        add(findFileData.cFileName, '\0');
-                    } while (FindNextFile(hFind, &findFileData) != 0);
+                do
+                {
+                    add(findFileData.cFileName, '\0');
+                } while (FindNextFile(hFind, &findFileData) != 0);
             }
         }
     }
@@ -220,7 +215,6 @@ void add(char *fileName, char mode)
         puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
         return;
     }
-
     if (GetFileAttributes(fileName) == INVALID_FILE_ATTRIBUTES)
     {
         puts("ERROR: INVALID FILE OR DIRECTORY PATH:");
@@ -264,7 +258,6 @@ void add(char *fileName, char mode)
         char *lastbs = strrchr(dir, '\\');
         strcpy(lastbs + 1, branch);
         strcat(dir, "\\staged\\stagedfiles.neogit");
-
         if (mode == 'n')
         {
             printf(" %s : ", fileName);
