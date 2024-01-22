@@ -21,7 +21,8 @@ void add(char *, char);
 int checkPathInFIle(char *, char *);
 void redo();
 void reset(char *);
-void resetFileSep();
+void undo();
+void fileSep();
 
 int main(int argc, char *argv[])
 {
@@ -53,7 +54,6 @@ int main(int argc, char *argv[])
     {
         if (strcmp(argv[2], "-redo") == 0 && argc == 3)
         {
-            puts("1");
             redo();
         }
         else if (strcmp(argv[2], "-f") == 0)
@@ -109,10 +109,15 @@ int main(int argc, char *argv[])
                 } while (FindNextFile(hFind, &findFileData) != 0);
             }
         }
+        fileSep();
     }
     else if (strcmp(argv[1], "reset") == 0 && argc > 2)
     {
-        if (strcmp(argv[2], "-f") == 0 && argc > 3)
+        if (strcmp(argv[2], "-undo") == 0)
+        {
+            undo();
+        }
+        else if (strcmp(argv[2], "-f") == 0 && argc > 3)
         {
             for (int i = 3; i < argc; i++)
             {
@@ -131,7 +136,6 @@ int main(int argc, char *argv[])
                     } while (FindNextFile(hFind, &findFileData) != 0);
                 }
             }
-            resetFileSep();
         }
         else
         {
@@ -149,7 +153,6 @@ int main(int argc, char *argv[])
                     reset(findFileData.cFileName);
                 } while (FindNextFile(hFind, &findFileData) != 0);
             }
-            resetFileSep();
         }
     }
     else
@@ -320,7 +323,7 @@ void add(char *fileName, char mode)
         {
             FILE *stagedfiles = fopen(dir, "a");
             fseek(stagedfiles, 0, SEEK_END);
-            fwrite(&filedir, 1, DIRNAME_LEN, stagedfiles);
+            fwrite(filedir, 1, DIRNAME_LEN, stagedfiles);
             fclose(stagedfiles);
 
             int d = checkPathInFIle(filedir, "resetfiles.neogit");
@@ -441,7 +444,7 @@ void reset(char *fileName)
     }
 }
 
-void resetFileSep()
+void fileSep()
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
@@ -452,7 +455,7 @@ void resetFileSep()
     fclose(status);
     char *lastbs = strrchr(dir, '\\');
     strcpy(lastbs + 1, branch);
-    strcat(dir, "\\staged\\resetfiles.neogit");
+    strcat(dir, "\\staged\\stagedfiles.neogit");
     FILE *resetfiles = fopen(dir, "a");
     fwrite(EMPTY_STRING, 1, DIRNAME_LEN, resetfiles);
     fclose(resetfiles);
@@ -511,4 +514,58 @@ void redo()
         d++;
         fseek(resetfiles, d * DIRNAME_LEN, SEEK_SET);
     }
+}
+
+void undo()
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+
+    dirChange(dir, "status.neogit", 0);
+    FILE *status = fopen(dir, "r");
+    char branch[DATASTR_LEN];
+    fread(branch, 1, DATASTR_LEN, status);
+    fclose(status);
+
+    dirChange(dir, branch, 1);
+    char resetdir[DIRNAME_LEN];
+    strcpy(resetdir, dir);
+
+    dirChange(dir, "staged\\stagedfiles.neogit", 0);
+    dirChange(resetdir, "staged\\resetfiles.neogit", 0);
+
+    FILE *stagedfiles = fopen(dir, "r+");
+    FILE *resetfiles = fopen(resetdir, "a");
+    fseek(stagedfiles, 0, SEEK_END);
+
+    char path[DIRNAME_LEN];
+    int d = ftell(stagedfiles);
+
+    while (1)
+    {
+        if (d == 0)
+            return;
+        fseek(stagedfiles, -DIRNAME_LEN, SEEK_CUR);
+        fread(path, 1, DIRNAME_LEN, stagedfiles);
+        if (strcmp(path, EMPTY_STRING) != 0)
+            break;
+        fseek(stagedfiles, -DIRNAME_LEN, SEEK_CUR);
+        d -= DIRNAME_LEN;
+    }
+
+    while (1)
+    {
+        if (strcmp(path, EMPTY_STRING) == 0)
+            break;
+        fwrite(path, 1, DIRNAME_LEN, resetfiles);
+        fseek(stagedfiles, -DIRNAME_LEN, SEEK_CUR);
+        fwrite(EMPTY_STRING, 1, DIRNAME_LEN, stagedfiles);
+        fseek(stagedfiles, -DIRNAME_LEN, SEEK_CUR);
+        d -= DIRNAME_LEN;
+        if (d == 0)
+            return;
+        fseek(stagedfiles, -DIRNAME_LEN, SEEK_CUR);
+        fread(path, 1, DIRNAME_LEN, stagedfiles);
+    }
+    return;
 }
