@@ -2,14 +2,16 @@
 #include <string.h>
 #include <stdlib.h>
 #include <windows.h>
+#include <time.h>
 
 #define GLOBAL 'g'
 #define LOCAL 'l'
 #define EMAIL 1
 #define USER 0
-#define DATASTR_LEN 50
+#define DATASTR_LEN 64
 #define DIRNAME_LEN 128
-#define EMPTY_STRING "THIS IS AN EMPTY STRING DESIGNED TO AND REWRITE THE ORIGINAL STRING THAT LAY IN HERE. RIP OLD STRING, ALL HAIL THE NEW STRING!"
+#define EMPTY_STRING "THIS IS AN EMPTY STRING DESIGNED TO REWRITE THE OTHER STRING THAT LAYED IN HERE. RIP DEAR OLD STRING, ALL HAIL THE NEW STRING! "
+#define MAX_COMMIT_NUM 1000
 
 #define INVCMD puts("Invalid cmd :/")
 
@@ -23,6 +25,18 @@ void redo();
 void reset(char *);
 void undo();
 void fileSep();
+
+struct commit
+{
+    int id;
+    char msg[72];
+    char branch[DATASTR_LEN];
+    char authName[DATASTR_LEN];
+    char authEmail[DATASTR_LEN];
+    struct commit *pervCommit;
+    time_t t;
+};
+typedef struct commit Commit;
 
 int main(int argc, char *argv[])
 {
@@ -167,9 +181,8 @@ void config(char mode, int type, char *data)
     {
         // updates configFile.neogit in main dir
         char exefileDir[DIRNAME_LEN];
-
         GetModuleFileName(NULL, exefileDir, DIRNAME_LEN);
-        dirChange(exefileDir, "configfile.neogit", 1);
+        dirChange(exefileDir, "configfile.neogit", 0);
 
         FILE *configFile = fopen(exefileDir, "r+");
         fseek(configFile, type * DATASTR_LEN, SEEK_SET);
@@ -187,7 +200,8 @@ void config(char mode, int type, char *data)
                 fprintf(stderr, "ERORR: LOCALCONFIGS NOT FOUND.");
                 return;
             }
-            fprintf(localconfigs, "G");
+            fseek(localconfigs, type * DATASTR_LEN, SEEK_SET);
+            fwrite(data, sizeof(char), DATASTR_LEN, localconfigs);
             fclose(localconfigs);
         }
         return;
@@ -206,7 +220,6 @@ void config(char mode, int type, char *data)
         dirChange(reploc, "localconfigs.neogit", 0);
 
         FILE *localconfigs = fopen(reploc, "r+");
-        fprintf(localconfigs, "L");
         fseek(localconfigs, type * DATASTR_LEN, SEEK_CUR);
         fwrite(data, sizeof(char), DATASTR_LEN, localconfigs);
         fclose(localconfigs);
@@ -245,8 +258,19 @@ void init()
     CreateDirectory(".neogit", NULL);
     SetFileAttributes(".neogit", FILE_ATTRIBUTE_HIDDEN);
 
+    char exefileDir[DIRNAME_LEN];
+    GetModuleFileName(NULL, exefileDir, DIRNAME_LEN);
+    dirChange(exefileDir, "configfile.neogit", 0);
+    FILE *configFile = fopen(exefileDir, "r");
+    char data[DATASTR_LEN];
+    fread(data, sizeof(char), DATASTR_LEN, configFile);
+
     FILE *localconfigs = fopen(".neogit\\localconfigs.neogit", "w");
-    fprintf(localconfigs, "G");
+    fwrite(data, 1, DATASTR_LEN, localconfigs);
+    fread(data, sizeof(char), DATASTR_LEN, configFile);
+    fwrite(data, 1, DATASTR_LEN, localconfigs);
+
+    fclose(configFile);
     fclose(localconfigs);
     puts("Initializing neogit repo in this directory.");
 
@@ -256,9 +280,7 @@ void init()
     fclose(status);
 
     CreateDirectory(".neogit\\main", NULL);
-    CreateDirectory(".neogit\\main\\staged", NULL);
-    FILE *staged = fopen(".\\main\\staged\\stagedfiles.neogit", "w");
-    fclose(staged);
+    CreateDirectory(".neogit\\commits", NULL);
 }
 
 void add(char *fileName, char mode)
@@ -299,15 +321,7 @@ void add(char *fileName, char mode)
         GetCurrentDirectory(DIRNAME_LEN, filedir);
         dirChange(filedir, fileName, 0);
 
-        dirChange(dir, "status.neogit", 0);
-
-        FILE *status = fopen(dir, "r");
-        char branch[DATASTR_LEN];
-        fread(branch, 1, DATASTR_LEN, status);
-        fclose(status);
-
-        dirChange(dir, branch, 1);
-        dirChange(dir, "staged\\stagedfiles.neogit", 0);
+        dirChange(dir, "stagedfiles.neogit", 0);
 
         if (mode == 'n')
         {
@@ -344,15 +358,7 @@ int checkPathInFIle(char *filedir, char *file) // check existance of a path in a
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
-    dirChange(dir, "status.neogit", 0);
 
-    FILE *status = fopen(dir, "r");
-    char branch[DATASTR_LEN];
-    fread(branch, 1, DATASTR_LEN, status);
-    fclose(status);
-
-    dirChange(dir, branch, 1);
-    dirChange(dir, "staged", 0);
     dirChange(dir, file, 0);
 
     FILE *stagedfiles = fopen(dir, "r");
@@ -399,9 +405,7 @@ void reset(char *fileName)
             }
             char path[DIRNAME_LEN];
             strcpy(path, fileName);
-            char *lastbs = strrchr(path, '\\');
-            lastbs[1] = '\0';
-            strcat(path, findFileData.cFileName);
+            dirChange(path, findFileData.cFileName, 1);
             reset(path);
         }
         FindClose(hFind);
@@ -421,23 +425,14 @@ void reset(char *fileName)
             return;
         }
 
-        strcat(dir, "\\status.neogit");
-        FILE *status = fopen(dir, "r");
-        char branch[DATASTR_LEN];
-        fread(branch, 1, DATASTR_LEN, status);
-        fclose(status);
-
-        char *lastbs = strrchr(dir, '\\');
-        strcpy(lastbs + 1, branch);
-        strcat(dir, "\\staged\\stagedfiles.neogit");
+        dirChange(dir, "stagedfiles.neogit", 0);
 
         FILE *stagedfiles = fopen(dir, "r+");
         fseek(stagedfiles, d * DIRNAME_LEN, SEEK_SET);
         fwrite(EMPTY_STRING, 1, DIRNAME_LEN, stagedfiles);
         fclose(stagedfiles);
 
-        lastbs = strrchr(dir, '\\');
-        strcpy(lastbs + 1, "resetfiles.neogit");
+        dirChange(dir, "resetfiles.neogit", 0);
         FILE *resetfiles = fopen(dir, "a");
         fwrite(filedir, 1, DIRNAME_LEN, resetfiles);
         fclose(resetfiles);
@@ -485,18 +480,11 @@ void redo()
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
 
-    dirChange(dir, "status.neogit", 0);
-    FILE *status = fopen(dir, "r");
-    char branch[DATASTR_LEN];
-    fread(branch, 1, DATASTR_LEN, status);
-    fclose(status);
-
-    dirChange(dir, branch, 1);
     char resetdir[DIRNAME_LEN];
     strcpy(resetdir, dir);
 
-    dirChange(dir, "staged\\stagedfiles.neogit", 0);
-    dirChange(resetdir, "staged\\resetfiles.neogit", 0);
+    dirChange(dir, "stagedfiles.neogit", 0);
+    dirChange(resetdir, "resetfiles.neogit", 0);
 
     FILE *stagedfiles = fopen(dir, "a");
     FILE *resetfiles = fopen(resetdir, "r+");
@@ -521,18 +509,11 @@ void undo()
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
 
-    dirChange(dir, "status.neogit", 0);
-    FILE *status = fopen(dir, "r");
-    char branch[DATASTR_LEN];
-    fread(branch, 1, DATASTR_LEN, status);
-    fclose(status);
-
-    dirChange(dir, branch, 1);
     char resetdir[DIRNAME_LEN];
     strcpy(resetdir, dir);
 
-    dirChange(dir, "staged\\stagedfiles.neogit", 0);
-    dirChange(resetdir, "staged\\resetfiles.neogit", 0);
+    dirChange(dir, "stagedfiles.neogit", 0);
+    dirChange(resetdir, "resetfiles.neogit", 0);
 
     FILE *stagedfiles = fopen(dir, "r+");
     FILE *resetfiles = fopen(resetdir, "a");
@@ -568,4 +549,19 @@ void undo()
         fread(path, 1, DIRNAME_LEN, stagedfiles);
     }
     return;
+}
+
+void commit()
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+
+    dirChange(dir, "commits\\commitslog.neogit", 0);
+
+    FILE *commitslog = fopen(dir, "r");
+
+    if (commitslog == NULL)
+    {
+        commitslog = fopen(dir, "w");
+    }
 }
