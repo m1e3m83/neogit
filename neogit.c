@@ -19,8 +19,9 @@ void findNeogitRep(char *);
 void init();
 void add(char *, char);
 int checkPathInFIle(char *, char *);
+void redo();
 void reset(char *);
-void resetfs();
+void resetFileSep();
 
 int main(int argc, char *argv[])
 {
@@ -50,11 +51,16 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[1], "add") == 0 && argc > 2)
     {
-        if (strcmp(argv[2], "-f") == 0)
+        if (strcmp(argv[2], "-redo") == 0 && argc == 3)
+        {
+            puts("1");
+            redo();
+        }
+        else if (strcmp(argv[2], "-f") == 0)
         {
             for (int i = 3; i < argc; i++)
             {
-                strtok(argv[i], "\\");
+                strtok(argv[i], "$");
 
                 WIN32_FIND_DATA findFileData;
                 HANDLE hFind = FindFirstFile(argv[i], &findFileData);
@@ -72,7 +78,7 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(argv[2], "-n") == 0)
         {
-            strtok(argv[3], "\\");
+            strtok(argv[3], "$");
 
             WIN32_FIND_DATA findFileData;
             HANDLE hFind = FindFirstFile(argv[3], &findFileData);
@@ -88,7 +94,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            strtok(argv[2], "\\");
+            strtok(argv[2], "$");
 
             WIN32_FIND_DATA findFileData;
             HANDLE hFind = FindFirstFile(argv[2], &findFileData);
@@ -125,7 +131,7 @@ int main(int argc, char *argv[])
                     } while (FindNextFile(hFind, &findFileData) != 0);
                 }
             }
-            resetfs();
+            resetFileSep();
         }
         else
         {
@@ -143,7 +149,7 @@ int main(int argc, char *argv[])
                     reset(findFileData.cFileName);
                 } while (FindNextFile(hFind, &findFileData) != 0);
             }
-            resetfs();
+            resetFileSep();
         }
     }
     else
@@ -276,13 +282,6 @@ void add(char *fileName, char mode)
         FindNextFile(hFind, &findFileData);
         while (FindNextFile(hFind, &findFileData) != 0)
         {
-            if (hFind == NULL)
-            {
-                puts("ERROR: INVALID FILE OR DIRECTORY PATH:");
-                puts(fileName);
-                continue;
-            }
-
             char path[DIRNAME_LEN];
             strcpy(path, fileName);
             dirChange(path, findFileData.cFileName, 1);
@@ -442,7 +441,7 @@ void reset(char *fileName)
     }
 }
 
-void resetfs()
+void resetFileSep()
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
@@ -475,5 +474,41 @@ void dirChange(char *dir, char *dirApp, int bsnum)
         *lastbs = '\0';
     }
     strcat(dir, "\\");
-    strcpy(lastbs, dirApp);
+    strcat(dir, dirApp);
+}
+
+void redo()
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+
+    dirChange(dir, "status.neogit", 0);
+    FILE *status = fopen(dir, "r");
+    char branch[DATASTR_LEN];
+    fread(branch, 1, DATASTR_LEN, status);
+    fclose(status);
+
+    dirChange(dir, branch, 1);
+    char resetdir[DIRNAME_LEN];
+    strcpy(resetdir, dir);
+
+    dirChange(dir, "staged\\stagedfiles.neogit", 0);
+    dirChange(resetdir, "staged\\resetfiles.neogit", 0);
+
+    FILE *stagedfiles = fopen(dir, "a");
+    FILE *resetfiles = fopen(resetdir, "r+");
+
+    char path[DIRNAME_LEN];
+    int d = 0;
+    while (fread(path, 1, DIRNAME_LEN, resetfiles))
+    {
+        if (strcmp(path, EMPTY_STRING) != 0)
+        {
+            fseek(resetfiles, d * DIRNAME_LEN, SEEK_SET);
+            fwrite(EMPTY_STRING, 1, DIRNAME_LEN, resetfiles);
+            fwrite(path, 1, DIRNAME_LEN, stagedfiles);
+        }
+        d++;
+        fseek(resetfiles, d * DIRNAME_LEN, SEEK_SET);
+    }
 }
