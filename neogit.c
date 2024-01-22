@@ -13,11 +13,12 @@
 
 #define INVCMD puts("Invalid cmd :/")
 
+void dirChange(char *, char *, int);
 void config(char, int, char *);
 void findNeogitRep(char *);
 void init();
 void add(char *, char);
-int checkstaged(char *);
+int checkPathInFIle(char *, char *);
 void reset(char *);
 void resetfs();
 
@@ -159,22 +160,19 @@ void config(char mode, int type, char *data)
         char exefileDir[DIRNAME_LEN];
 
         GetModuleFileName(NULL, exefileDir, DIRNAME_LEN);
-        char *lastbs = strrchr(exefileDir, '\\');
-        if (lastbs != NULL)
-            *lastbs = '\0';
-        strcat(exefileDir, "\\configfile.neogit");
+        dirChange(exefileDir, "configfile.neogit", 1);
 
         FILE *configFile = fopen(exefileDir, "r+");
         fseek(configFile, type * DATASTR_LEN, SEEK_SET);
         fwrite(data, sizeof(char), DATASTR_LEN, configFile);
         fclose(configFile);
 
-        char repLoc[DIRNAME_LEN];
-        findNeogitRep(repLoc);
-        if (*repLoc != '\0')
+        char reploc[DIRNAME_LEN];
+        findNeogitRep(reploc);
+        if (*reploc != '\0')
         {
-            strcat(repLoc, "\\localconfigs.neogit");
-            FILE *localconfigs = fopen(repLoc, "r+");
+            dirChange(reploc, "localconfigs.neogit", 0);
+            FILE *localconfigs = fopen(reploc, "r+");
             if (localconfigs == NULL)
             {
                 fprintf(stderr, "ERORR: LOCALCONFIGS NOT FOUND.");
@@ -189,12 +187,15 @@ void config(char mode, int type, char *data)
     {
         char reploc[DIRNAME_LEN];
         findNeogitRep(reploc);
+
         if (*reploc == '\0')
         {
             puts("ERROR: NOT IN A REPO FOLDER OR SUBFOLDER!");
             return;
         }
-        strcat(reploc, "\\localconfigs.neogit");
+
+        dirChange(reploc, "localconfigs.neogit", 0);
+
         FILE *localconfigs = fopen(reploc, "r+");
         fprintf(localconfigs, "L");
         fseek(localconfigs, type * DATASTR_LEN, SEEK_CUR);
@@ -260,6 +261,7 @@ void add(char *fileName, char mode)
         puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
         return;
     }
+
     if (GetFileAttributes(fileName) == INVALID_FILE_ATTRIBUTES)
     {
         puts("ERROR: INVALID FILE OR DIRECTORY PATH:");
@@ -267,7 +269,8 @@ void add(char *fileName, char mode)
     }
     else if (GetFileAttributes(fileName) & FILE_ATTRIBUTE_DIRECTORY)
     {
-        strcat(fileName, "\\*");
+        dirChange(fileName, "*", 0);
+
         WIN32_FIND_DATA findFileData;
         HANDLE hFind = FindFirstFile(fileName, &findFileData);
         FindNextFile(hFind, &findFileData);
@@ -279,11 +282,11 @@ void add(char *fileName, char mode)
                 puts(fileName);
                 continue;
             }
+
             char path[DIRNAME_LEN];
             strcpy(path, fileName);
-            char *lastbs = strrchr(path, '\\');
-            lastbs[1] = '\0';
-            strcat(path, findFileData.cFileName);
+            dirChange(path, findFileData.cFileName, 1);
+
             add(path, mode);
         }
         FindClose(hFind);
@@ -292,49 +295,63 @@ void add(char *fileName, char mode)
     {
         char filedir[DIRNAME_LEN];
         GetCurrentDirectory(DIRNAME_LEN, filedir);
-        strcat(filedir, "\\");
-        strcat(filedir, fileName);
+        dirChange(filedir, fileName, 0);
 
-        strcat(dir, "\\status.neogit");
+        dirChange(dir, "status.neogit", 0);
+
         FILE *status = fopen(dir, "r");
         char branch[DATASTR_LEN];
         fread(branch, 1, DATASTR_LEN, status);
         fclose(status);
-        char *lastbs = strrchr(dir, '\\');
-        strcpy(lastbs + 1, branch);
-        strcat(dir, "\\staged\\stagedfiles.neogit");
+
+        dirChange(dir, branch, 1);
+        dirChange(dir, "staged\\stagedfiles.neogit", 0);
+
         if (mode == 'n')
         {
             printf(" %s : ", fileName);
-            if (checkstaged(filedir) == -1)
+            if (checkPathInFIle(filedir, "stagedfiles.neogit") == -1)
             {
                 puts("not staged");
             }
             else
                 puts("staged");
         }
-        else if (checkstaged(filedir) == -1)
+        else if (checkPathInFIle(filedir, "stagedfiles.neogit") == -1)
         {
             FILE *stagedfiles = fopen(dir, "a");
             fseek(stagedfiles, 0, SEEK_END);
             fwrite(&filedir, 1, DIRNAME_LEN, stagedfiles);
             fclose(stagedfiles);
+
+            int d = checkPathInFIle(filedir, "resetfiles.neogit");
+            if (d != -1)
+            {
+                dirChange(dir, "resetfiles.neogit", 1);
+
+                FILE *resetfiles = fopen(dir, "r+");
+                fseek(resetfiles, d * DIRNAME_LEN, SEEK_SET);
+                fwrite(EMPTY_STRING, 1, DIRNAME_LEN, resetfiles);
+                fclose(resetfiles);
+            }
         }
     }
 }
 
-int checkstaged(char *filedir)
+int checkPathInFIle(char *filedir, char *file) // check existance of a path in a file in current branch
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
-    strcat(dir, "\\status.neogit");
+    dirChange(dir, "status.neogit", 0);
+
     FILE *status = fopen(dir, "r");
     char branch[DATASTR_LEN];
     fread(branch, 1, DATASTR_LEN, status);
     fclose(status);
-    char *lastbs = strrchr(dir, '\\');
-    strcpy(lastbs + 1, branch);
-    strcat(dir, "\\staged\\stagedfiles.neogit");
+
+    dirChange(dir, branch, 1);
+    dirChange(dir, "staged", 0);
+    dirChange(dir, file, 0);
 
     FILE *stagedfiles = fopen(dir, "r");
     int d = 0;
@@ -394,7 +411,7 @@ void reset(char *fileName)
         strcat(filedir, "\\");
         strcat(filedir, fileName);
 
-        int d = checkstaged(filedir);
+        int d = checkPathInFIle(filedir, "stagedfiles.neogit");
 
         if (d == -1)
         {
@@ -440,4 +457,23 @@ void resetfs()
     FILE *resetfiles = fopen(dir, "a");
     fwrite(EMPTY_STRING, 1, DIRNAME_LEN, resetfiles);
     fclose(resetfiles);
+}
+
+void dirChange(char *dir, char *dirApp, int bsnum)
+{
+    if (bsnum == 0)
+    {
+        strcar(dir, "\\");
+        strcat(dir, dirApp);
+        return;
+    }
+
+    char *lastbs;
+    for (int i = 0; i < bsnum; i++)
+    {
+        lastbs = strrchr(dir, '\\');
+        *lastbs = '\0';
+    }
+    strcat(dir, "\\");
+    strcpy(lastbs, dirApp);
 }
