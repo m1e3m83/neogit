@@ -29,7 +29,7 @@ void fileSep();
 struct commit
 {
     int id;
-    char msg[72];
+    char msg[73];
     char branch[DATASTR_LEN];
     char authName[DATASTR_LEN];
     char authEmail[DATASTR_LEN];
@@ -37,6 +37,10 @@ struct commit
     time_t t;
 };
 typedef struct commit Commit;
+
+Commit commits[MAX_COMMIT_NUM];
+int commitCount;
+Commit *head;
 
 int main(int argc, char *argv[])
 {
@@ -277,6 +281,8 @@ void init()
     FILE *status = fopen(".neogit\\status.neogit", "w");
     char branch[DATASTR_LEN] = "main";
     fwrite(branch, 1, DATASTR_LEN, status);
+    int head = 0;
+    fwrite(&head, sizeof(int), 1, status);
     fclose(status);
 
     CreateDirectory(".neogit\\main", NULL);
@@ -443,14 +449,7 @@ void fileSep()
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
-    strcat(dir, "\\status.neogit");
-    FILE *status = fopen(dir, "r");
-    char branch[DATASTR_LEN];
-    fread(branch, 1, DATASTR_LEN, status);
-    fclose(status);
-    char *lastbs = strrchr(dir, '\\');
-    strcpy(lastbs + 1, branch);
-    strcat(dir, "\\staged\\stagedfiles.neogit");
+    strcat(dir, "\\stagedfiles.neogit");
     FILE *resetfiles = fopen(dir, "a");
     fwrite(EMPTY_STRING, 1, DIRNAME_LEN, resetfiles);
     fclose(resetfiles);
@@ -551,17 +550,84 @@ void undo()
     return;
 }
 
-void commit()
+void loadCommits()
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
+    dirChange(dir, "commitslog.neogit", 0);
 
-    dirChange(dir, "commits\\commitslog.neogit", 0);
+    int count = 0;
 
     FILE *commitslog = fopen(dir, "r");
 
-    if (commitslog == NULL)
+    if (commitslog != NULL)
+        while (fread(commits + count, sizeof(Commit), 1, commitslog))
+            count++;
+
+    commitCount = count;
+}
+
+void findHead()
+{
+    if (commitCount == 0)
     {
-        commitslog = fopen(dir, "w");
+        head = NULL;
+        return;
     }
+
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    dirChange(dir, "status.neogit", 0);
+
+    int headid;
+    FILE *status = fopen(dir, "r");
+    fseek(status, DATASTR_LEN, SEEK_CUR);
+    fread(&headid, sizeof(int), 1, status);
+    fclose(status);
+
+    for (int i = 0; i < commitCount; i++)
+    {
+        if (headid == commits[i].id)
+        {
+            head = &commits[i];
+            return;
+        }
+    }
+}
+
+void commit(char *msg)
+{
+    if (strlen(msg) > 72)
+    {
+        puts("ERROR: COMMIT MSG EXCEEDS THE LIMIT(72)!");
+        return;
+    }
+
+    Commit *curCommit = &commits[commitCount];
+    curCommit->id = 10000 + commitCount;
+
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+
+    dirChange(dir, "localconfigs.neogit", 0);
+    FILE *localconfigs = fopen(dir, "r");
+    fread(&curCommit->authName, 1, DATASTR_LEN, localconfigs);
+    fread(&curCommit->authEmail, 1, DATASTR_LEN, localconfigs);
+    fclose(localconfigs);
+
+    dirChange(dir, "status.neogit", 1);
+    FILE *status = fopen(dir, "r");
+    fread(&curCommit->branch, 1, DATASTR_LEN, status);
+    fclose(status);
+
+    time(&curCommit->t);
+
+    curCommit->pervCommit = head;
+
+    dirChange(dir, "commitslog.neogit", 0);
+
+    FILE *commitslog = fopen(dir, "a");
+
+    fwrite(&curCommit, sizeof(Commit), 1, commitslog);
+    head = curCommit;
 }
