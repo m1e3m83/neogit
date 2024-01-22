@@ -463,7 +463,7 @@ void dirChange(char *dir, char *dirApp, int bsnum)
 {
     if (bsnum == 0)
     {
-        strcar(dir, "\\");
+        strcat(dir, "\\");
         strcat(dir, dirApp);
         return;
     }
