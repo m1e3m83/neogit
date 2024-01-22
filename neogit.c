@@ -25,7 +25,7 @@ void redo();
 void reset(char *);
 void undo();
 void fileSep();
-
+// stuct
 struct commit
 {
     int id;
