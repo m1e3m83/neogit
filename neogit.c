@@ -662,12 +662,45 @@ void snapshot()
             char filepath[DIRNAME_LEN];
             strcpy(filepath, reploc);
             dirChange(filepath, findFileData.cFileName, 0);
-            copydir(filepath, dir);
+            copydir(filepath, dir, '\0');
         }
+        CloseHandle(hFind);
+    }
+    else
+    {
+        char prevCom[DIRNAME_LEN];
+        strcpy(prevCom, dir);
+        char prevComid[DATASTR_LEN];
+        itoa(head->pervCommit->id, prevComid, 10);
+        dirChange(prevCom, prevComid, 1);
+
+        WIN32_FIND_DATA findFileData;
+        HANDLE hFind = FindFirstFile(prevCom, &findFileData);
+        FindNextFile(reploc, &findFileData);
+        while (FindNextFile(hFind, &findFileData) != 0)
+        {
+            char filepath[DIRNAME_LEN];
+            strcpy(filepath, prevCom);
+            dirChange(filepath, findFileData.cFileName, 0);
+            copydir(filepath, dir, '\0');
+        }
+
+        hFind = FindFirstFile(reploc, &findFileData);
+        FindNextFile(reploc, &findFileData);
+        while (FindNextFile(hFind, &findFileData) != 0)
+        {
+            if (strcmp(findFileData.cFileName, ".neogit") == 0)
+                continue;
+            char filepath[DIRNAME_LEN];
+            strcpy(filepath, reploc);
+            dirChange(filepath, findFileData.cFileName, 0);
+            copydir(filepath, dir, 's');
+        }
+        CloseHandle(hFind);
     }
 }
 
-int copydir(char *src, char *dest)
+int copydir(char *src, char *dest, char mode)
 {
     if (GetFileAttributes(src) == INVALID_FILE_ATTRIBUTES)
     {
@@ -697,13 +730,14 @@ int copydir(char *src, char *dest)
         {
             strcpy(subfilepath, src);
             dirChange(subfilepath, findFileData.cFileName, 0);
-            fileCopied += copydir(subfilepath, foldername);
+            fileCopied += copydir(subfilepath, foldername, mode);
         }
+        CloseHandle(hFind);
         return fileCopied;
     }
     else
     {
-        if (checkPathInFIle(src, "stagedfiles.neogit") == -1)
+        if (checkPathInFIle(src, "stagedfiles.neogit") == -1 && mode == 's')
         {
             return 0;
         }
