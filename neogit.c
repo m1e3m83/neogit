@@ -25,6 +25,12 @@ void redo();
 void reset(char *);
 void undo();
 void fileSep();
+
+void loadCommits();
+void findHead();
+void commit(char *);
+void snapshot();
+int copydir(char *, char *, char);
 // stuct
 struct commit
 {
@@ -44,6 +50,9 @@ Commit *head;
 
 int main(int argc, char *argv[])
 {
+    loadCommits();
+    findHead();
+
     if (strcmp(argv[1], "config") == 0 && (argc == 4 || argc == 5))
     {
         char mode = LOCAL;
@@ -173,6 +182,11 @@ int main(int argc, char *argv[])
             }
         }
     }
+    else if (strcmp(argv[1], "commit") == 0 && strcmp(argv[2], "-m") == 0)
+    {
+        commit(argv[3]);
+        snapshot();
+    }
     else
         INVCMD;
 
@@ -186,9 +200,13 @@ void config(char mode, int type, char *data)
         // updates configFile.neogit in main dir
         char exefileDir[DIRNAME_LEN];
         GetModuleFileName(NULL, exefileDir, DIRNAME_LEN);
-        dirChange(exefileDir, "configfile.neogit", 0);
+        dirChange(exefileDir, "configfile.neogit", 1);
 
         FILE *configFile = fopen(exefileDir, "r+");
+        if (configFile == NULL)
+        {
+            puts("ERROR: COULD NOT FIND CONFIGFILE");
+        }
         fseek(configFile, type * DATASTR_LEN, SEEK_SET);
         fwrite(data, sizeof(char), DATASTR_LEN, configFile);
         fclose(configFile);
@@ -264,7 +282,7 @@ void init()
 
     char exefileDir[DIRNAME_LEN];
     GetModuleFileName(NULL, exefileDir, DIRNAME_LEN);
-    dirChange(exefileDir, "configfile.neogit", 0);
+    dirChange(exefileDir, "configfile.neogit", 1);
     FILE *configFile = fopen(exefileDir, "r");
     char data[DATASTR_LEN];
     fread(data, sizeof(char), DATASTR_LEN, configFile);
@@ -611,23 +629,25 @@ void commit(char *msg)
 
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
-
     dirChange(dir, "localconfigs.neogit", 0);
     FILE *localconfigs = fopen(dir, "r");
     fread(&curCommit->authName, 1, DATASTR_LEN, localconfigs);
     fread(&curCommit->authEmail, 1, DATASTR_LEN, localconfigs);
     fclose(localconfigs);
 
+    strcpy(curCommit->msg, msg);
+
     dirChange(dir, "status.neogit", 1);
     FILE *status = fopen(dir, "r");
     fread(&curCommit->branch, 1, DATASTR_LEN, status);
+    fwrite(&curCommit->id, sizeof(int), 1, status);
     fclose(status);
 
     time(&curCommit->t);
 
     curCommit->pervCommit = head;
 
-    dirChange(dir, "commitslog.neogit", 0);
+    dirChange(dir, "commitslog.neogit", 1);
 
     FILE *commitslog = fopen(dir, "a");
 
