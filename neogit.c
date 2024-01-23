@@ -48,7 +48,7 @@ typedef struct commit Commit;
 
 Commit commits[MAX_COMMIT_NUM];
 int commitCount;
-Commit *head;
+Commit *head = NULL;
 
 int main(int argc, char *argv[])
 {
@@ -196,7 +196,6 @@ int main(int argc, char *argv[])
     }
     else
         INVCMD;
-
     return 0;
 }
 
@@ -356,7 +355,7 @@ void add(char *fileName, char mode)
 
         if (mode == 'n')
         {
-            printf(" %-20s : ", fileName);
+            printf(" %-30s : ", fileName);
             if (checkPathInFIle(filedir, "stagedfiles.neogit") == -1)
             {
                 puts("not staged");
@@ -605,13 +604,16 @@ void findHead()
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
     dirChange(dir, "status.neogit", 0);
-
     int headid;
     FILE *status = fopen(dir, "r");
-    fseek(status, DATASTR_LEN, SEEK_CUR);
+    if (status == NULL)
+    {
+        puts("ERROR: UNABLE TO FIND STATUS FILE!");
+        return;
+    }
+    fseek(status, DATASTR_LEN, SEEK_SET);
     fread(&headid, sizeof(int), 1, status);
     fclose(status);
-
     for (int i = 0; i < commitCount; i++)
     {
         if (headid == commits[i].id)
@@ -644,9 +646,10 @@ void commit(char *msg)
     strcpy(curCommit->msg, msg);
 
     dirChange(dir, "status.neogit", 1);
-    FILE *status = fopen(dir, "r");
+    FILE *status = fopen(dir, "r+");
     fread(&curCommit->branch, 1, DATASTR_LEN, status);
-    fwrite(&curCommit->id, sizeof(int), 1, status);
+    fseek(status, DATASTR_LEN, SEEK_SET);
+    fwrite(&(curCommit->id), sizeof(int), 1, status);
     fclose(status);
 
     time(&curCommit->t);
@@ -696,7 +699,6 @@ void snapshot()
         {
             strcpy(filepath, prevCom);
             dirChange(filepath, findFileData.cFileName, 0);
-            printf("filepath in snapshot func before passing to copydir: %s", filepath);
             copydir(filepath, dir, COPY_ALL);
         }
         CloseHandle(hFind);
@@ -734,7 +736,6 @@ int copydir(char *src, char *dest, char mode)
         char foldername[DIRNAME_LEN];
         strcpy(foldername, dest);
         strcat(foldername, lastbs);
-        printf("dir address inside copydir func : %s\n", foldername);
         if (GetFileAttributes(foldername) == INVALID_FILE_ATTRIBUTES || !(GetFileAttributes(foldername) & FILE_ATTRIBUTE_DIRECTORY))
             CreateDirectory(foldername, NULL);
         // coping src folder path and searching its contents
@@ -764,12 +765,9 @@ int copydir(char *src, char *dest, char mode)
         }
         char *lastbs = strrchr(src, '\\');
         char destfilepath[DATASTR_LEN];
-        printf("dest : %s\n", dest);
         strcpy(destfilepath, dest);
         strcat(destfilepath, lastbs);
-        puts(src);
-        puts("->");
-        puts(destfilepath);
+
         CopyFile(src, destfilepath, 0);
         return 1;
     }
