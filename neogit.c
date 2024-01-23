@@ -547,6 +547,8 @@ void undo()
         fseek(stagedfiles, -DIRNAME_LEN, SEEK_CUR);
         fread(path, 1, DIRNAME_LEN, stagedfiles);
     }
+    fclose(stagedfiles);
+    fclose(resetfiles);
     return;
 }
 
@@ -565,6 +567,7 @@ void loadCommits()
             count++;
 
     commitCount = count;
+    fclose(commitslog);
 }
 
 void findHead()
@@ -628,6 +631,87 @@ void commit(char *msg)
 
     FILE *commitslog = fopen(dir, "a");
 
-    fwrite(&curCommit, sizeof(Commit), 1, commitslog);
+    fwrite(curCommit, sizeof(Commit), 1, commitslog);
     head = curCommit;
+    fclose(commitslog);
+}
+
+void snapshot()
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    dirChange(dir, "commits", 0);
+    char headidstr[DATASTR_LEN];
+    itoa(head->id, headidstr, 10);
+    dirChange(dir, headidstr, 0);
+
+    char reploc[DIRNAME_LEN];
+    findNeogitRep(dir);
+    dirChange(reploc, "", 1);
+
+    CreateDirectory(dir, NULL);
+    if (head->id == 10000)
+    {
+        WIN32_FIND_DATA findFileData;
+        HANDLE hFind = FindFirstFile(reploc, &findFileData);
+        FindNextFile(reploc, &findFileData);
+        while (FindNextFile(hFind, &findFileData) != 0)
+        {
+            if (strcmp(findFileData.cFileName, ".neogit") == 0)
+                continue;
+            char filepath[DIRNAME_LEN];
+            strcpy(filepath, reploc);
+            dirChange(filepath, findFileData.cFileName, 0);
+            copydir(filepath, dir);
+        }
+    }
+}
+
+int copydir(char *src, char *dest)
+{
+    if (GetFileAttributes(src) == INVALID_FILE_ATTRIBUTES)
+    {
+        puts("ERROR: INVALILD FILENAME OR PATH");
+        return 0;
+    }
+    else if (GetFileAttributes(src) & FILE_ATTRIBUTE_DIRECTORY)
+    {
+        char *lastbs = strrchr(src, '\\');
+        char foldername[DATASTR_LEN];
+        strcpy(foldername, dest);
+        strcat(foldername, lastbs);
+        if (!(GetFileAttributes(foldername) & FILE_ATTRIBUTE_DIRECTORY))
+            CreateDirectory(foldername, NULL);
+
+        char subfilepath[DIRNAME_LEN];
+        strcpy(subfilepath, src);
+
+        dirChange(subfilepath, "*", 0);
+        WIN32_FIND_DATA findFileData;
+        HANDLE hFind = FindFirstFile(subfilepath, &findFileData);
+        FindNextFile(hFind, &findFileData);
+
+        int fileCopied = 0;
+
+        while (FindNextFile(hFind, &findFileData) != 0)
+        {
+            strcpy(subfilepath, src);
+            dirChange(subfilepath, findFileData.cFileName, 0);
+            fileCopied += copydir(subfilepath, foldername);
+        }
+        return fileCopied;
+    }
+    else
+    {
+        if (checkPathInFIle(src, "stagedfiles.neogit") == -1)
+        {
+            return 0;
+        }
+        char *lastbs = strrchr(src, '\\');
+        char destfilepath[DATASTR_LEN];
+        strcpy(destfilepath, dest);
+        strcat(destfilepath, lastbs);
+        CopyFile(src, destfilepath, 0);
+        return 1;
+    }
 }
