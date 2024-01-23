@@ -18,8 +18,10 @@
 #define INVCMD puts("Invalid cmd :/")
 
 void dirChange(char *, char *, int);
-void config(char, int, char *);
 void findNeogitRep(char *);
+int copydir(char *, char *, char);
+
+void config(char, int, char *);
 void init();
 void add(char *, char);
 int checkPathInFIle(char *, char *);
@@ -32,7 +34,8 @@ void loadCommits();
 void findHead();
 void commit(char *);
 void snapshot();
-int copydir(char *, char *, char);
+void filelog();
+int checkInFilelog(char *);
 // stuct
 struct commit
 {
@@ -49,6 +52,13 @@ typedef struct commit Commit;
 Commit commits[MAX_COMMIT_NUM];
 int commitCount;
 Commit *head = NULL;
+
+struct fileinfo
+{
+    char path[DIRNAME_LEN];
+    time_t lastCommit;
+};
+typedef struct fileinfo Fileinfo;
 
 int main(int argc, char *argv[])
 {
@@ -189,10 +199,11 @@ int main(int argc, char *argv[])
             }
         }
     }
-    else if (strcmp(argv[1], "commit") == 0 && strcmp(argv[2], "-m") == 0)
+    else if (strcmp(argv[1], "commit") == 0 && strcmp(argv[2], "-m") == 0 && argc == 4)
     {
         commit(argv[3]);
         snapshot();
+        filelog();
     }
     else
         INVCMD;
@@ -317,13 +328,18 @@ void add(char *fileName, char mode)
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
+
+    char filedir[DIRNAME_LEN];
+    GetCurrentDirectory(DIRNAME_LEN, filedir);
+    dirChange(filedir, fileName, 0);
+
     if (*dir == '\0')
     {
         puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
         return;
     }
 
-    if (GetFileAttributes(fileName) == INVALID_FILE_ATTRIBUTES)
+    if (GetFileAttributes(fileName) == INVALID_FILE_ATTRIBUTES && checkInFilelog(filedir) == -1)
     {
         puts("ERROR: INVALID FILE OR DIRECTORY PATH:");
         puts(fileName);
@@ -347,10 +363,6 @@ void add(char *fileName, char mode)
     }
     else
     {
-        char filedir[DIRNAME_LEN];
-        GetCurrentDirectory(DIRNAME_LEN, filedir);
-        dirChange(filedir, fileName, 0);
-
         dirChange(dir, "stagedfiles.neogit", 0);
 
         if (mode == 'n')
@@ -771,4 +783,82 @@ int copydir(char *src, char *dest, char mode)
         CopyFile(src, destfilepath, 0);
         return 1;
     }
+}
+
+void filelog()
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+
+    dirChange(dir, "filelog.neogit", 0);
+    FILE *filelog = fopen(dir, "r+");
+    if (filelog == NULL)
+        filelog = fopen(dir, "w");
+
+    dirChange(dir, "stagedfiles.neogit", 1);
+    FILE *stagedfiles = fopen(dir, "r+");
+    if (stagedfiles == NULL)
+        return;
+
+    int sfplace = 0;
+    char stagedfiledir[DIRNAME_LEN];
+    while (fread(stagedfiledir, 1, DIRNAME_LEN, stagedfiles))
+    {
+        if (strcmp(stagedfiledir, EMPTY_STRING) == 0)
+            continue;
+
+        int flplace = checkInFilelog(stagedfiledir);
+
+        Fileinfo fileinfo;
+        strcpy(fileinfo.path, stagedfiledir);
+        time(&fileinfo.lastCommit);
+
+        if (flplace == -1)
+        {
+            int emptyPlace = checkInFilelog(EMPTY_STRING);
+            if (emptyPlace == -1)
+                fseek(filelog, 0, SEEK_END);
+            else
+                fseek(filelog, emptyPlace * sizeof(Fileinfo), SEEK_SET);
+            fwrite(&fileinfo, sizeof(Fileinfo), 1, filelog);
+        }
+        else
+        {
+            fseek(filelog, flplace * sizeof(Fileinfo), SEEK_SET);
+            if (GetFileAttributes(stagedfiledir) == INVALID_FILE_ATTRIBUTES)
+            {
+                strcpy(fileinfo.path, EMPTY_STRING);
+                // delete it from the cur commit
+            }
+            fwrite(&fileinfo, sizeof(fileinfo), 1, filelog);
+        }
+
+        sfplace++;
+        fseek(stagedfiles, sfplace * DIRNAME_LEN, SEEK_SET);
+        fseek(filelog, 0, SEEK_SET);
+    }
+    fclose(filelog);
+    fclose(stagedfiles);
+    stagedfiles = fopen(dir, "w");
+    fclose(stagedfiles);
+}
+
+int checkInFilelog(char *filepath)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+
+    dirChange(dir, "filelog.neogit", 0);
+
+    FILE *filelog = fopen(dir, "r");
+    int placement = 0;
+    Fileinfo fileinfo;
+    while (fread(&fileinfo, sizeof(Fileinfo), 1, filelog))
+    {
+        if (strcmp(fileinfo.path, filepath) == 0)
+            return placement;
+        placement++;
+        fseek(filelog, placement * sizeof(fileinfo), SEEK_SET);
+    }
+    return -1;
 }
