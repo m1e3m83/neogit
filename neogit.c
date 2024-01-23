@@ -20,6 +20,7 @@
 void dirChange(char *, char *, int);
 void findNeogitRep(char *);
 int copydir(char *, char *, char);
+void wildcard(char *, void(char *, char), char);
 
 void config(char, int, char *);
 void init();
@@ -36,6 +37,7 @@ void commit(char *);
 void snapshot();
 void filelog();
 int checkInFilelog(char *);
+void cleanCommit(char *);
 // stuct
 struct commit
 {
@@ -99,58 +101,26 @@ int main(int argc, char *argv[])
         {
             for (int i = 3; i < argc; i++)
             {
-                strtok(argv[i], "$");
-
-                WIN32_FIND_DATA findFileData;
-                HANDLE hFind = FindFirstFile(argv[i], &findFileData);
-
-                if (hFind == NULL)
-                    puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
+                if (strrchr(argv[i], '$') != NULL)
+                    wildcard(argv[i], add, '\0');
                 else
-                {
-                    do
-                    {
-                        if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
-                            add(findFileData.cFileName, '\0');
-                    } while (FindNextFile(hFind, &findFileData) != 0);
-                }
+                    add(argv[i], '\0');
             }
             fileSep();
         }
         else if (strcmp(argv[2], "-n") == 0)
         {
-            strtok(argv[3], "$");
-
-            WIN32_FIND_DATA findFileData;
-            HANDLE hFind = FindFirstFile(argv[3], &findFileData);
-            if (hFind == NULL)
-                puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
+            if (strrchr(argv[3], '$') != NULL)
+                wildcard(argv[3], add, 'n');
             else
-            {
-                do
-                {
-                    if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
-                        add(findFileData.cFileName, 'n');
-                } while (FindNextFile(hFind, &findFileData) != 0);
-            }
+                add(argv[3], 'n');
         }
         else
         {
-            strtok(argv[2], "$");
-
-            WIN32_FIND_DATA findFileData;
-            HANDLE hFind = FindFirstFile(argv[2], &findFileData);
-
-            if (hFind == NULL)
-                puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
+            if (strrchr(argv[2], '$') != NULL)
+                wildcard(argv[2], add, '\0');
             else
-            {
-                do
-                {
-                    if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
-                        add(findFileData.cFileName, '\0');
-                } while (FindNextFile(hFind, &findFileData) != 0);
-            }
+                add(argv[2], '\0');
             fileSep();
         }
     }
@@ -164,39 +134,18 @@ int main(int argc, char *argv[])
         {
             for (int i = 3; i < argc; i++)
             {
-                strtok(argv[i], "$");
-
-                WIN32_FIND_DATA findFileData;
-                HANDLE hFind = FindFirstFile(argv[i], &findFileData);
-
-                if (hFind == NULL)
-                    puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
+                if (strrchr(argv[i], '$') != NULL)
+                    wildcard(argv[i], reset, '\0');
                 else
-                {
-                    do
-                    {
-                        reset(findFileData.cFileName, 'a');
-                    } while (FindNextFile(hFind, &findFileData) != 0);
-                }
+                    add(argv[i], '\0');
             }
         }
         else
         {
-            strtok(argv[2], "$");
-
-            WIN32_FIND_DATA findFileData;
-            HANDLE hFind = FindFirstFile(argv[2], &findFileData);
-
-            if (hFind == NULL)
-                puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
+            if (strrchr(argv[2], '$') != NULL)
+                wildcard(argv[2], add, '\0');
             else
-            {
-                do
-                {
-                    if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
-                        reset(findFileData.cFileName, 'a');
-                } while (FindNextFile(hFind, &findFileData) != 0);
-            }
+                add(argv[2], '\0');
         }
     }
     else if (strcmp(argv[1], "commit") == 0 && strcmp(argv[2], "-m") == 0 && argc == 4)
@@ -338,13 +287,12 @@ void add(char *fileName, char mode)
         puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
         return;
     }
-
     if (GetFileAttributes(fileName) == INVALID_FILE_ATTRIBUTES && checkInFilelog(filedir) == -1)
     {
         puts("ERROR: INVALID FILE OR DIRECTORY PATH:");
         puts(fileName);
     }
-    else if (GetFileAttributes(fileName) & FILE_ATTRIBUTE_DIRECTORY)
+    else if ((GetFileAttributes(fileName) & FILE_ATTRIBUTE_DIRECTORY) && checkInFilelog(filedir) == -1)
     {
         dirChange(fileName, "*", 0);
 
@@ -804,41 +752,46 @@ void filelog()
     char stagedfiledir[DIRNAME_LEN];
     while (fread(stagedfiledir, 1, DIRNAME_LEN, stagedfiles))
     {
-        if (strcmp(stagedfiledir, EMPTY_STRING) == 0)
-            continue;
-
-        int flplace = checkInFilelog(stagedfiledir);
-
-        Fileinfo fileinfo;
-        strcpy(fileinfo.path, stagedfiledir);
-        time(&fileinfo.lastCommit);
-
-        if (flplace == -1)
+        if (strcmp(stagedfiledir, EMPTY_STRING) != 0)
         {
-            int emptyPlace = checkInFilelog(EMPTY_STRING);
-            if (emptyPlace == -1)
-                fseek(filelog, 0, SEEK_END);
-            else
-                fseek(filelog, emptyPlace * sizeof(Fileinfo), SEEK_SET);
-            fwrite(&fileinfo, sizeof(Fileinfo), 1, filelog);
-        }
-        else
-        {
-            fseek(filelog, flplace * sizeof(Fileinfo), SEEK_SET);
-            if (GetFileAttributes(stagedfiledir) == INVALID_FILE_ATTRIBUTES)
+            int flplace = checkInFilelog(stagedfiledir);
+
+            Fileinfo fileinfo;
+            strcpy(fileinfo.path, stagedfiledir);
+            time(&fileinfo.lastCommit);
+
+            if (flplace == -1)
             {
-                strcpy(fileinfo.path, EMPTY_STRING);
-                // delete it from the cur commit
+                int emptyPlace = checkInFilelog(EMPTY_STRING);
+                if (emptyPlace == -1)
+                    fseek(filelog, 0, SEEK_END);
+                else
+                    fseek(filelog, emptyPlace * sizeof(Fileinfo), SEEK_SET);
+                fwrite(&fileinfo, sizeof(Fileinfo), 1, filelog);
             }
-            fwrite(&fileinfo, sizeof(fileinfo), 1, filelog);
+            else
+            {
+                fseek(filelog, flplace * sizeof(Fileinfo), SEEK_SET);
+                if (GetFileAttributes(stagedfiledir) == INVALID_FILE_ATTRIBUTES)
+                {
+                    strcpy(fileinfo.path, EMPTY_STRING);
+                    // delete it from the cur commit
+                    cleanCommit(stagedfiledir);
+                }
+                fwrite(&fileinfo, sizeof(Fileinfo), 1, filelog);
+            }
         }
-
         sfplace++;
         fseek(stagedfiles, sfplace * DIRNAME_LEN, SEEK_SET);
         fseek(filelog, 0, SEEK_SET);
     }
     fclose(filelog);
     fclose(stagedfiles);
+
+    stagedfiles = fopen(dir, "w");
+    fclose(stagedfiles);
+
+    dirChange(dir, "resetfiles.neogit", 1);
     stagedfiles = fopen(dir, "w");
     fclose(stagedfiles);
 }
@@ -861,4 +814,54 @@ int checkInFilelog(char *filepath)
         fseek(filelog, placement * sizeof(fileinfo), SEEK_SET);
     }
     return -1;
+}
+
+void wildcard(char *fileName, void(addset)(char *, char), char addmode)
+{
+    strtok(fileName, "$");
+
+    WIN32_FIND_DATA findFileData;
+    HANDLE hFind = FindFirstFile(fileName, &findFileData);
+
+    if (hFind == NULL)
+        puts("ERROR: INVALID FILE NAME OR DIRECTORY!");
+    else
+    {
+        do
+        {
+            if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
+            {
+                if (strrchr(fileName, '\\') != NULL)
+                {
+                    dirChange(fileName, findFileData.cFileName, 1);
+                    addset(fileName, addmode);
+                }
+                else
+                    addset(findFileData.cFileName, addmode);
+            }
+        } while (FindNextFile(hFind, &findFileData) != 0);
+    }
+}
+
+void cleanCommit(char *fileprevpath)
+{
+    char reploc[DIRNAME_LEN];
+    findNeogitRep(reploc);
+    char *add = strrchr(reploc, '\\');
+    *add = '\0';
+    add = strrchr(reploc, '\\');
+    char *mark = strstr(fileprevpath, add);
+    mark += strlen(add);
+
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    dirChange(dir, "commits", 0);
+    char headidstr[DATASTR_LEN];
+    itoa(head->id, headidstr, 10);
+    dirChange(dir, headidstr, 0);
+    strcat(dir, mark);
+
+    int a = DeleteFile(dir);
+    if (a == 0)
+        puts("ERROR");
 }
