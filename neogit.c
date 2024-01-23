@@ -8,6 +8,8 @@
 #define LOCAL 'l'
 #define EMAIL 1
 #define USER 0
+#define COPY_STAGED 's'
+#define COPY_ALL '\0'
 #define DATASTR_LEN 64
 #define DIRNAME_LEN 128
 #define EMPTY_STRING "THIS IS AN EMPTY STRING DESIGNED TO REWRITE THE OTHER STRING THAT LAYED IN HERE. RIP DEAR OLD STRING, ALL HAIL THE NEW STRING! "
@@ -98,10 +100,12 @@ int main(int argc, char *argv[])
                 {
                     do
                     {
-                        add(findFileData.cFileName, '\0');
+                        if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
+                            add(findFileData.cFileName, '\0');
                     } while (FindNextFile(hFind, &findFileData) != 0);
                 }
             }
+            fileSep();
         }
         else if (strcmp(argv[2], "-n") == 0)
         {
@@ -115,7 +119,8 @@ int main(int argc, char *argv[])
             {
                 do
                 {
-                    add(findFileData.cFileName, 'n');
+                    if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
+                        add(findFileData.cFileName, 'n');
                 } while (FindNextFile(hFind, &findFileData) != 0);
             }
         }
@@ -132,11 +137,12 @@ int main(int argc, char *argv[])
             {
                 do
                 {
-                    add(findFileData.cFileName, '\0');
+                    if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
+                        add(findFileData.cFileName, '\0');
                 } while (FindNextFile(hFind, &findFileData) != 0);
             }
+            fileSep();
         }
-        fileSep();
     }
     else if (strcmp(argv[1], "reset") == 0 && argc > 2)
     {
@@ -177,7 +183,8 @@ int main(int argc, char *argv[])
             {
                 do
                 {
-                    reset(findFileData.cFileName);
+                    if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
+                        reset(findFileData.cFileName);
                 } while (FindNextFile(hFind, &findFileData) != 0);
             }
         }
@@ -349,7 +356,7 @@ void add(char *fileName, char mode)
 
         if (mode == 'n')
         {
-            printf(" %s : ", fileName);
+            printf(" %-20s : ", fileName);
             if (checkPathInFIle(filedir, "stagedfiles.neogit") == -1)
             {
                 puts("not staged");
@@ -360,7 +367,6 @@ void add(char *fileName, char mode)
         else if (checkPathInFIle(filedir, "stagedfiles.neogit") == -1)
         {
             FILE *stagedfiles = fopen(dir, "a");
-            fseek(stagedfiles, 0, SEEK_END);
             fwrite(filedir, 1, DIRNAME_LEN, stagedfiles);
             fclose(stagedfiles);
 
@@ -658,84 +664,80 @@ void commit(char *msg)
 
 void snapshot()
 {
+    // setting dir to repo\.neogit\commits\#headcommit folder
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
     dirChange(dir, "commits", 0);
     char headidstr[DATASTR_LEN];
     itoa(head->id, headidstr, 10);
     dirChange(dir, headidstr, 0);
-
-    char reploc[DIRNAME_LEN];
-    findNeogitRep(dir);
-    dirChange(reploc, "", 1);
-
     CreateDirectory(dir, NULL);
-    if (head->id == 10000)
+
+    // setting reploc to main repo\.neogit folder
+    char reploc[DIRNAME_LEN];
+    findNeogitRep(reploc);
+
+    if (head->pervCommit != NULL)
     {
-        WIN32_FIND_DATA findFileData;
-        HANDLE hFind = FindFirstFile(reploc, &findFileData);
-        FindNextFile(reploc, &findFileData);
-        while (FindNextFile(hFind, &findFileData) != 0)
-        {
-            if (strcmp(findFileData.cFileName, ".neogit") == 0)
-                continue;
-            char filepath[DIRNAME_LEN];
-            strcpy(filepath, reploc);
-            dirChange(filepath, findFileData.cFileName, 0);
-            copydir(filepath, dir, '\0');
-        }
-        CloseHandle(hFind);
-    }
-    else
-    {
+        // going to prevcom folder
         char prevCom[DIRNAME_LEN];
         strcpy(prevCom, dir);
-        char prevComid[DATASTR_LEN];
-        itoa(head->pervCommit->id, prevComid, 10);
-        dirChange(prevCom, prevComid, 1);
+        char prevCommitid[DATASTR_LEN];
+        itoa(head->pervCommit->id, prevCommitid, 10);
+        dirChange(prevCom, prevCommitid, 1);
 
+        char filepath[DIRNAME_LEN];
+        strcpy(filepath, prevCom);
+        dirChange(filepath, "*", 0);
         WIN32_FIND_DATA findFileData;
-        HANDLE hFind = FindFirstFile(prevCom, &findFileData);
-        FindNextFile(reploc, &findFileData);
+        HANDLE hFind = FindFirstFile(filepath, &findFileData);
+        FindNextFile(hFind, &findFileData);
         while (FindNextFile(hFind, &findFileData) != 0)
         {
-            char filepath[DIRNAME_LEN];
             strcpy(filepath, prevCom);
             dirChange(filepath, findFileData.cFileName, 0);
-            copydir(filepath, dir, '\0');
-        }
-
-        hFind = FindFirstFile(reploc, &findFileData);
-        FindNextFile(reploc, &findFileData);
-        while (FindNextFile(hFind, &findFileData) != 0)
-        {
-            if (strcmp(findFileData.cFileName, ".neogit") == 0)
-                continue;
-            char filepath[DIRNAME_LEN];
-            strcpy(filepath, reploc);
-            dirChange(filepath, findFileData.cFileName, 0);
-            copydir(filepath, dir, 's');
+            printf("filepath in snapshot func before passing to copydir: %s", filepath);
+            copydir(filepath, dir, COPY_ALL);
         }
         CloseHandle(hFind);
     }
+
+    char filepath[DIRNAME_LEN];
+    strcpy(filepath, reploc);
+    dirChange(filepath, "*", 1);
+
+    WIN32_FIND_DATA findFileData;
+    HANDLE hFind = FindFirstFile(filepath, &findFileData);
+    FindNextFile(hFind, &findFileData);
+    while (FindNextFile(hFind, &findFileData) != 0)
+    {
+        if (strcmp(findFileData.cFileName, ".neogit") == 0)
+            continue;
+        strcpy(filepath, reploc);
+        dirChange(filepath, findFileData.cFileName, 1);
+        copydir(filepath, dir, COPY_STAGED);
+    }
+    CloseHandle(hFind);
 }
 
 int copydir(char *src, char *dest, char mode)
 {
     if (GetFileAttributes(src) == INVALID_FILE_ATTRIBUTES)
     {
-        puts("ERROR: INVALILD FILENAME OR PATH");
+        fputs("ERROR: INVALILD FILENAME OR PATH", stderr);
         return 0;
     }
     else if (GetFileAttributes(src) & FILE_ATTRIBUTE_DIRECTORY)
     {
+        // finding the name of the folder and creating it
         char *lastbs = strrchr(src, '\\');
-        char foldername[DATASTR_LEN];
+        char foldername[DIRNAME_LEN];
         strcpy(foldername, dest);
         strcat(foldername, lastbs);
-        if (!(GetFileAttributes(foldername) & FILE_ATTRIBUTE_DIRECTORY))
+        printf("dir address inside copydir func : %s\n", foldername);
+        if (GetFileAttributes(foldername) == INVALID_FILE_ATTRIBUTES || !(GetFileAttributes(foldername) & FILE_ATTRIBUTE_DIRECTORY))
             CreateDirectory(foldername, NULL);
-
+        // coping src folder path and searching its contents
         char subfilepath[DIRNAME_LEN];
         strcpy(subfilepath, src);
 
@@ -745,7 +747,6 @@ int copydir(char *src, char *dest, char mode)
         FindNextFile(hFind, &findFileData);
 
         int fileCopied = 0;
-
         while (FindNextFile(hFind, &findFileData) != 0)
         {
             strcpy(subfilepath, src);
@@ -757,14 +758,18 @@ int copydir(char *src, char *dest, char mode)
     }
     else
     {
-        if (checkPathInFIle(src, "stagedfiles.neogit") == -1 && mode == 's')
+        if (checkPathInFIle(src, "stagedfiles.neogit") == -1 && mode == COPY_STAGED)
         {
             return 0;
         }
         char *lastbs = strrchr(src, '\\');
         char destfilepath[DATASTR_LEN];
+        printf("dest : %s\n", dest);
         strcpy(destfilepath, dest);
         strcat(destfilepath, lastbs);
+        puts(src);
+        puts("->");
+        puts(destfilepath);
         CopyFile(src, destfilepath, 0);
         return 1;
     }
