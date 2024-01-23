@@ -26,7 +26,7 @@ void init();
 void add(char *, char);
 int checkPathInFIle(char *, char *);
 void redo();
-void reset(char *);
+void reset(char *, char);
 void undo();
 void fileSep();
 
@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
                 {
                     do
                     {
-                        reset(findFileData.cFileName);
+                        reset(findFileData.cFileName, 'a');
                     } while (FindNextFile(hFind, &findFileData) != 0);
                 }
             }
@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
                 do
                 {
                     if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
-                        reset(findFileData.cFileName);
+                        reset(findFileData.cFileName, 'a');
                 } while (FindNextFile(hFind, &findFileData) != 0);
             }
         }
@@ -415,7 +415,7 @@ int checkPathInFIle(char *filedir, char *file) // check existance of a path in a
     return -1;
 }
 
-void reset(char *fileName)
+void reset(char *fileName, char nth)
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
@@ -447,7 +447,7 @@ void reset(char *fileName)
             char path[DIRNAME_LEN];
             strcpy(path, fileName);
             dirChange(path, findFileData.cFileName, 1);
-            reset(path);
+            reset(path, 'a');
         }
         FindClose(hFind);
     }
