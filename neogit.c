@@ -17,28 +17,6 @@
 
 #define INVCMD puts("Invalid cmd :/")
 
-void dirChange(char *, char *, int);
-void findNeogitRep(char *);
-int copydir(char *, char *, char);
-void wildcard(char *, void(char *, char), char);
-
-void config(char, int, char *);
-void init();
-void add(char *, char);
-int checkPathInFIle(char *, char *);
-void redo();
-void reset(char *, char);
-void undo();
-void fileSep();
-
-void loadCommits();
-void findHead();
-void commit(char *, int, Commit *);
-void snapshot();
-int filelog();
-int checkInFilelog(char *);
-void cleanCommit(char *);
-// stuct
 struct commit
 {
     int id;
@@ -63,6 +41,28 @@ struct fileinfo
     time_t lastCommit;
 };
 typedef struct fileinfo Fileinfo;
+
+void dirChange(char *, char *, int);
+void findNeogitRep(char *);
+int copydir(char *, char *, char);
+void wildcard(char *, void(char *, char), char);
+
+void config(char, int, char *);
+void init();
+void add(char *, char);
+int checkPathInFIle(char *, char *);
+void redo();
+void reset(char *, char);
+void undo();
+void fileSep();
+
+void loadCommits();
+void findHead();
+void commit(char *, int, Commit *);
+void snapshot();
+int filelog();
+int checkInFilelog(char *);
+void cleanCommit(char *);
 
 int main(int argc, char *argv[])
 {
@@ -752,7 +752,7 @@ int filelog()
     dirChange(dir, "stagedfiles.neogit", 1);
     FILE *stagedfiles = fopen(dir, "r+");
     if (stagedfiles == NULL)
-        return;
+        return 0;
 
     int sfplace = 0;
     char stagedfiledir[DIRNAME_LEN];
@@ -875,4 +875,126 @@ void cleanCommit(char *fileprevpath)
     int a = DeleteFile(dir);
     if (a == 0)
         puts("ERROR");
+}
+
+void comlog(int(mode)(char *, Commit *), char *inp)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    dirChange(dir, "commitslog.neogit", 0);
+
+    for (int i = commitCount - 1; i >= 0; i--)
+    {
+        if (mode(inp, commits + i))
+        {
+            struct tm *timeinfo = localtime(&commits[i].t);
+            printf("\tCommit %d made at %d:%d:%d in %d\\%d\\%d\n", commits[i].id, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec, timeinfo->tm_year, timeinfo->tm_mon, timeinfo->tm_mday);
+            printf("\tOn branch \'%s\' :\n");
+            printf("\t\t\"%s\"\n", commits[i].msg);
+            printf("\t\t%s  %s\n", commits[i].authName, commits[i].authEmail);
+            printf("\t\t%-2d files were commited\n", commits[i].num);
+        }
+    }
+}
+
+int logcg(char *inp, Commit *com)
+{
+    return 1;
+}
+
+int logcn(char *num, Commit *com)
+{
+    int n;
+    char suc = sscanf(num, "%d", &n);
+    if (suc == -1)
+        return 0;
+    if (commitCount - (com - commits) <= n)
+        return 1;
+    else
+        return 0;
+}
+
+int logcb(char *branch, Commit *com)
+{
+    if (strcmp(com->branch, branch) == 0)
+        return 1;
+    else
+        return 0;
+}
+
+int logca(char *autName, Commit *com)
+{
+    if (strcmp(com->authName, autName) == 0)
+        return 1;
+    else
+        return 0;
+}
+
+int loccdSince(char *inpdate, Commit *com)
+{
+    int y, m = 0, d = 0, h = 0, min = 0, s = 0;
+    time_t curtime;
+    time(&curtime);
+    struct tm *ti = localtime(&curtime);
+
+    if (strrchr(inpdate, '\\') == NULL && strrchr(inpdate, ':') != NULL)
+    {
+        sscanf(inpdate, "%d:%d:%d", &h, &m, &s);
+    }
+    else if (strrchr(inpdate, '\\') != NULL)
+    {
+        sscanf(inpdate, "%d\\%d\\%d  %d:%d:%d", &y, &m, &d, &h, &min, &s);
+        ti->tm_year = y;
+        ti->tm_mon = m - 1;
+        ti->tm_mday = d;
+    }
+    else
+        return 0;
+
+    ti->tm_hour = h;
+    ti->tm_min = m;
+    ti->tm_sec = s;
+    time_t targetTime = mktime(ti);
+    if (targetTime > com->t)
+        return 1;
+    else
+        return 0;
+}
+int loccdBefore(char *inpdate, Commit *com)
+{
+    int y, m = 0, d = 0, h = 0, min = 0, s = 0;
+    time_t curtime;
+    time(&curtime);
+    struct tm *ti = localtime(&curtime);
+
+    if (strrchr(inpdate, '\\') == NULL && strrchr(inpdate, ':') != NULL)
+    {
+        sscanf(inpdate, "%d:%d:%d", &h, &m, &s);
+    }
+    else if (strrchr(inpdate, '\\') != NULL)
+    {
+        sscanf(inpdate, "%d\\%d\\%d  %d:%d:%d", &y, &m, &d, &h, &min, &s);
+        ti->tm_year = y;
+        ti->tm_mon = m - 1;
+        ti->tm_mday = d;
+    }
+    else
+        return 0;
+
+    ti->tm_hour = h;
+    ti->tm_min = m;
+    ti->tm_sec = s;
+    time_t targetTime = mktime(ti);
+    if (targetTime < com->t)
+        return 1;
+    else
+        return 0;
+}
+
+int loccw(char *word, Commit *com)
+{
+    if (strstr(com->msg, word) == NULL)
+        return 0;
+    else
+        return 1;
 }
