@@ -750,6 +750,10 @@ void snapshot()
         copydir(filepath, dir, COPY_STAGED);
     }
     CloseHandle(hFind);
+
+    dirChange(dir, "stagedfiles.neogit", 2);
+    FILE *stagedfiles = fopen(dir, "w");
+    fclose(stagedfiles);
 }
 
 int copydir(char *src, char *dest, char mode)
@@ -860,9 +864,6 @@ int filelog()
         fseek(filelog, 0, SEEK_SET);
     }
     fclose(filelog);
-    fclose(stagedfiles);
-
-    stagedfiles = fopen(dir, "w");
     fclose(stagedfiles);
 
     dirChange(dir, "resetfiles.neogit", 1);
