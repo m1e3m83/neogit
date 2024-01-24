@@ -12,9 +12,9 @@
 #define COPY_STAGED 's'
 #define COPY_ALL '\0'
 
-#define DATASTR_LEN 64
+#define DATASTR_LEN 128
 #define DIRNAME_LEN 128
-#define EMPTY_STRING "THIS IS AN EMPTY STRING DESIGNED TO REWRITE THE OTHER STRING THAT LAYED IN HERE. RIP DEAR OLD STRING, ALL HAIL THE NEW STRING! "
+#define EMPTY_STRING "THIS IS AN EMPTY STRING DESIGNED TO REWRITE THE OTHER STRING THAT LAYED IN HERE. RIP DEAR OLD STRING, ALL HAIL THE NEW STRING. "
 #define MAX_COMMIT_NUM 1000
 
 #define INVCMD puts("Invalid cmd :/")
@@ -307,13 +307,13 @@ void init()
     puts("Initializing neogit repo in this directory.");
 
     FILE *status = fopen(".neogit\\status.neogit", "w");
-    char branch[DATASTR_LEN] = "main";
+    char branch[DATASTR_LEN] = "master";
     fwrite(branch, 1, DATASTR_LEN, status);
     int head = 0;
     fwrite(&head, sizeof(int), 1, status);
     fclose(status);
 
-    CreateDirectory(".neogit\\main", NULL);
+    CreateDirectory(".neogit\\master", NULL);
     CreateDirectory(".neogit\\commits", NULL);
 }
 
