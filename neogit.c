@@ -8,8 +8,10 @@
 #define LOCAL 'l'
 #define EMAIL 1
 #define USER 0
+
 #define COPY_STAGED 's'
 #define COPY_ALL '\0'
+
 #define DATASTR_LEN 64
 #define DIRNAME_LEN 128
 #define EMPTY_STRING "THIS IS AN EMPTY STRING DESIGNED TO REWRITE THE OTHER STRING THAT LAYED IN HERE. RIP DEAR OLD STRING, ALL HAIL THE NEW STRING! "
@@ -72,6 +74,9 @@ int logca(char *, Commit *);
 int logcdBefore(char *, Commit *);
 int logcdSince(char *, Commit *);
 int logcw(char *, Commit *);
+
+void status(char *);
+void statusD();
 
 int main(int argc, char *argv[])
 {
@@ -183,6 +188,15 @@ int main(int argc, char *argv[])
             comlog(logcw, argv[3]);
         else
             INVCMD;
+    }
+    else if (strcmp(argv[1], "status") == 0 && argc == 2)
+    {
+        char dir[DIRNAME_LEN];
+        findNeogitRep(dir);
+        char *lastbs = strrchr(dir, '\\');
+        *lastbs = '\0';
+        status(dir);
+        statusD();
     }
     else
         INVCMD;
@@ -462,6 +476,8 @@ void fileSep()
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
+    if (*dir == '\0')
+        return;
     strcat(dir, "\\stagedfiles.neogit");
     FILE *resetfiles = fopen(dir, "a");
     fwrite(EMPTY_STRING, 1, DIRNAME_LEN, resetfiles);
@@ -491,7 +507,11 @@ void redo()
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
-
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
+        return;
+    }
     char resetdir[DIRNAME_LEN];
     strcpy(resetdir, dir);
 
@@ -520,7 +540,11 @@ void undo()
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
-
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
+        return;
+    }
     char resetdir[DIRNAME_LEN];
     strcpy(resetdir, dir);
 
@@ -569,6 +593,11 @@ void loadCommits()
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        commitCount = 0;
+        return;
+    }
     dirChange(dir, "commitslog.neogit", 0);
 
     int count = 0;
@@ -629,6 +658,11 @@ void commit(char *msg, int num, Commit *merge)
 
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
+        return;
+    }
     dirChange(dir, "localconfigs.neogit", 0);
     FILE *localconfigs = fopen(dir, "r");
     fread(&curCommit->authName, 1, DATASTR_LEN, localconfigs);
@@ -664,6 +698,8 @@ void snapshot()
     // setting dir to repo\.neogit\commits\#headcommit folder
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
+    if (*dir == '\0')
+        return;
     dirChange(dir, "commits", 0);
     char headidstr[DATASTR_LEN];
     itoa(head->id, headidstr, 10);
@@ -771,7 +807,8 @@ int filelog()
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
-
+    if (*dir == '\0')
+        return 0;
     dirChange(dir, "filelog.neogit", 0);
     FILE *filelog = fopen(dir, "r+");
     if (filelog == NULL)
@@ -886,6 +923,8 @@ void cleanCommit(char *fileprevpath)
 {
     char reploc[DIRNAME_LEN];
     findNeogitRep(reploc);
+    if (*reploc == '\0')
+        return;
     char *add = strrchr(reploc, '\\');
     *add = '\0';
     add = strrchr(reploc, '\\');
@@ -909,6 +948,8 @@ void comlog(int(mode)(char *, Commit *), char *inp)
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
+    if (*dir == '\0')
+        return;
     dirChange(dir, "commitslog.neogit", 0);
 
     for (int i = commitCount - 1; i >= 0; i--)
@@ -1031,4 +1072,111 @@ int logcw(char *word, Commit *com)
         return 0;
     else
         return 1;
+}
+
+void status(char *fileName)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A GIT REPO FOLDER OF SUBFOLDER!");
+        return;
+    }
+    if (GetFileAttributes(fileName) == INVALID_FILE_ATTRIBUTES)
+    {
+        puts("ERROR: INVALID FILE OR DIRECTORY PATH:");
+        puts(fileName);
+    }
+    else if ((GetFileAttributes(fileName) & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        dirChange(fileName, "*", 0);
+
+        WIN32_FIND_DATA findFileData;
+        HANDLE hFind = FindFirstFile(fileName, &findFileData);
+        FindNextFile(hFind, &findFileData);
+        while (FindNextFile(hFind, &findFileData) != 0)
+        {
+            if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
+            {
+                char path[DIRNAME_LEN];
+                strcpy(path, fileName);
+                dirChange(path, findFileData.cFileName, 1);
+
+                status(path);
+            }
+        }
+        FindClose(hFind);
+    }
+    else
+    {
+        int stageIdx = checkPathInFIle(fileName, "stagedfiles.neogit");
+        int logIdx = checkInFilelog(fileName);
+        char Y, X;
+
+        if (stageIdx == -1)
+            X = '-';
+        else
+            X = '+';
+
+        if (logIdx == -1)
+            Y = 'A';
+        else
+        {
+            dirChange(dir, "filelog.neogit", 0);
+            FILE *filelog = fopen(dir, "r");
+            Fileinfo fileinfo;
+            fseek(filelog, logIdx * sizeof(Fileinfo), SEEK_SET);
+            fread(&fileinfo, sizeof(Fileinfo), 1, filelog);
+            fclose(filelog);
+
+            WIN32_FIND_DATA findFileData;
+            HANDLE hFind = FindFirstFile(fileName, &findFileData);
+
+            FILETIME lastWriteTime = findFileData.ftLastWriteTime;
+            ULARGE_INTEGER lastWriteTimeULarge;
+            lastWriteTimeULarge.LowPart = lastWriteTime.dwLowDateTime;
+            lastWriteTimeULarge.HighPart = lastWriteTime.dwHighDateTime;
+
+            time_t lastWriteTimeInSeconds = (time_t)((lastWriteTimeULarge.QuadPart - 116444736000000000) / 10000000);
+
+            if (lastWriteTimeInSeconds > fileinfo.lastCommit)
+            {
+                Y = 'M';
+            }
+            else
+                return;
+        }
+
+        printf("\t%-55s : %c%c\n", fileName, X, Y);
+    }
+}
+
+void statusD()
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+        return;
+
+    dirChange(dir, "filelog.neogit", 0);
+    FILE *filelog = fopen(dir, "r");
+    int placement = 0;
+    Fileinfo fileinfo;
+    while (fread(&fileinfo, sizeof(Fileinfo), 1, filelog))
+    {
+        if (GetFileAttributes(fileinfo.path) == INVALID_FILE_ATTRIBUTES && strcmp(fileinfo.path, EMPTY_STRING) != 0)
+        {
+            char Y = 'D';
+            char X;
+            if (checkPathInFIle(fileinfo.path, "stagedfiles.neogit") == -1)
+                X = '-';
+            else
+                X = '+';
+            printf("\t%-55s : %c%c\n", fileinfo.path, X, Y);
+        }
+        placement++;
+        fseek(filelog, placement * sizeof(fileinfo), SEEK_SET);
+    }
 }
