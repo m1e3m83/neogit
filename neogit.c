@@ -33,7 +33,7 @@ void fileSep();
 
 void loadCommits();
 void findHead();
-void commit(char *, int);
+void commit(char *, int, Commit *);
 void snapshot();
 int filelog();
 int checkInFilelog(char *);
@@ -47,6 +47,7 @@ struct commit
     char authName[DATASTR_LEN];
     char authEmail[DATASTR_LEN];
     struct commit *pervCommit;
+    struct commit *merge;
     time_t t;
     int num;
 };
@@ -152,7 +153,7 @@ int main(int argc, char *argv[])
     else if (strcmp(argv[1], "commit") == 0 && strcmp(argv[2], "-m") == 0 && argc == 4)
     {
         int commitNum = filelog();
-        commit(argv[3], commitNum);
+        commit(argv[3], commitNum, NULL);
         snapshot();
     }
     else
@@ -585,7 +586,7 @@ void findHead()
     }
 }
 
-void commit(char *msg, int num)
+void commit(char *msg, int num, Commit *merge)
 {
     if (strlen(msg) > 72)
     {
@@ -618,6 +619,8 @@ void commit(char *msg, int num)
     time(&curCommit->t);
 
     curCommit->pervCommit = head;
+
+    curCommit->merge = merge;
 
     dirChange(dir, "commitslog.neogit", 1);
 
