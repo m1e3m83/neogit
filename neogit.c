@@ -33,9 +33,9 @@ void fileSep();
 
 void loadCommits();
 void findHead();
-void commit(char *);
+void commit(char *, int);
 void snapshot();
-void filelog();
+int filelog();
 int checkInFilelog(char *);
 void cleanCommit(char *);
 // stuct
@@ -48,6 +48,7 @@ struct commit
     char authEmail[DATASTR_LEN];
     struct commit *pervCommit;
     time_t t;
+    int num;
 };
 typedef struct commit Commit;
 
@@ -150,9 +151,9 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[1], "commit") == 0 && strcmp(argv[2], "-m") == 0 && argc == 4)
     {
-        commit(argv[3]);
+        int commitNum = filelog();
+        commit(argv[3], commitNum);
         snapshot();
-        filelog();
     }
     else
         INVCMD;
@@ -584,7 +585,7 @@ void findHead()
     }
 }
 
-void commit(char *msg)
+void commit(char *msg, int num)
 {
     if (strlen(msg) > 72)
     {
@@ -594,6 +595,8 @@ void commit(char *msg)
 
     Commit *curCommit = &commits[commitCount];
     curCommit->id = 10000 + commitCount;
+
+    curCommit->num = num;
 
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
@@ -733,7 +736,7 @@ int copydir(char *src, char *dest, char mode)
     }
 }
 
-void filelog()
+int filelog()
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
@@ -750,10 +753,13 @@ void filelog()
 
     int sfplace = 0;
     char stagedfiledir[DIRNAME_LEN];
+
+    int stagedFilesNum = 0;
     while (fread(stagedfiledir, 1, DIRNAME_LEN, stagedfiles))
     {
         if (strcmp(stagedfiledir, EMPTY_STRING) != 0)
         {
+            stagedFilesNum++;
             int flplace = checkInFilelog(stagedfiledir);
 
             Fileinfo fileinfo;
@@ -794,6 +800,8 @@ void filelog()
     dirChange(dir, "resetfiles.neogit", 1);
     stagedfiles = fopen(dir, "w");
     fclose(stagedfiles);
+
+    return stagedFilesNum;
 }
 
 int checkInFilelog(char *filepath)
