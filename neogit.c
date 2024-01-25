@@ -12,6 +12,9 @@
 #define COPY_STAGED 's'
 #define COPY_ALL '\0'
 
+#define REPLACE 1
+#define READ 2
+
 #define DATASTR_LEN 128
 #define DIRNAME_LEN 128
 #define EMPTY_STRING "THIS IS AN EMPTY STRING DESIGNED TO REWRITE THE OTHER STRING THAT LAYED IN HERE. RIP DEAR OLD STRING, ALL HAIL THE NEW STRING. "
@@ -51,6 +54,13 @@ struct alias
 };
 typedef struct alias Alias;
 
+struct shortcut
+{
+    char sname[DATASTR_LEN];
+    char msg[DATASTR_LEN];
+};
+typedef struct shortcut Shortcut;
+
 void dirChange(char *, char *, int);
 void findNeogitRep(char *);
 int copydir(char *, char *, char);
@@ -76,6 +86,8 @@ void snapshot();
 int filelog();
 int checkInFilelog(char *);
 void cleanCommit(char *);
+void set(const char *, const char *);
+int findShortcut(const char *, char *, char);
 
 void comlog(int(char *, Commit *), char *);
 int logcg(char *, Commit *);
@@ -178,11 +190,38 @@ int main(int argc, char *argv[])
                 reset(argv[2], '\0');
         }
     }
-    else if (strcmp(argv[1], "commit") == 0 && strcmp(argv[2], "-m") == 0 && argc == 4)
+    else if (strcmp(argv[1], "commit") == 0 && argc == 4)
     {
-        int commitNum = filelog();
-        commit(argv[3], commitNum, NULL);
-        snapshot();
+        if (strcmp(argv[2], "-m") == 0)
+        {
+            int commitNum = filelog();
+            commit(argv[3], commitNum, NULL);
+            snapshot();
+        }
+        else if (strcmp(argv[2], "-s") == 0)
+        {
+            char msg[DIRNAME_LEN];
+            int sfound = findShortcut(argv[3], msg, READ);
+            if (sfound)
+            {
+                puts(msg);
+                int commitNum = filelog();
+                commit(msg, commitNum, NULL);
+                snapshot();
+            }
+        }
+    }
+    else if (strcmp(argv[1], "set") == 0 && strcmp(argv[2], "-m") == 0 && strcmp(argv[4], "-s") == 0 && argc == 6)
+    {
+        set(argv[5], argv[3]);
+    }
+    else if (strcmp(argv[1], "replace") == 0 && strcmp(argv[2], "-m") == 0 && strcmp(argv[4], "-s") == 0 && argc == 6)
+    {
+        findShortcut(argv[5], argv[3], REPLACE);
+    }
+    else if (strcmp(argv[1], "remove") == 0 && strcmp(argv[2], "-s") && argc == 4)
+    {
+        findShortcut(argv[3], EMPTY_STRING, REPLACE);
     }
     else if (strcmp(argv[1], "log") == 0)
     {
@@ -1209,7 +1248,8 @@ void writeAlias(char *name, char *cmd, char mode)
     else if (mode == GLOBAL)
     {
         GetModuleFileName(NULL, dir, DIRNAME_LEN);
-        dirChange(dir, "aliasfile.neogit", 0);
+        dirChange(dir, "aliasfile.neogit", 1);
+        puts(dir);
     }
     FILE *aliasfile = fopen(dir, "a");
     fwrite(&alias, sizeof(Alias), 1, aliasfile);
@@ -1238,7 +1278,7 @@ int exAlias(char *inp)
     }
     fclose(aliasfile);
     GetModuleFileName(NULL, dir, DIRNAME_LEN);
-    dirChange(dir, "aliasfile.neogit", 0);
+    dirChange(dir, "aliasfile.neogit", 1);
     aliasfile = fopen(dir, "r");
     while (fread(&alias, sizeof(Alias), 1, aliasfile))
     {
@@ -1249,8 +1289,57 @@ int exAlias(char *inp)
             system(cmd);
             return 1;
         }
-        place++;
-        fseek(aliasfile, place * sizeof(Alias), SEEK_SET);
     }
+    return 0;
+}
+
+void set(const char *sname, const char *msg)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO.");
+        return;
+    }
+    dirChange(dir, "shortcuts.neogit", 0);
+    FILE *shortcuts = fopen(dir, "a");
+    Shortcut shortcut;
+    strcpy(shortcut.sname, sname);
+    strcpy(shortcut.msg, msg);
+    fwrite(&shortcut, sizeof(Shortcut), 1, shortcuts);
+    fclose(shortcuts);
+    puts(shortcut.sname);
+    puts(shortcut.msg);
+}
+
+int findShortcut(const char *sname, char *msg, char mode)
+{
+    Shortcut shortcut;
+    strcpy(shortcut.sname, sname);
+    strcpy(shortcut.msg, msg);
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO.");
+        return 0;
+    }
+    dirChange(dir, "shortcuts.neogit", 0);
+    FILE *shortcuts = fopen(dir, "r+");
+    while (fread(&shortcut, sizeof(Shortcut), 1, shortcuts))
+    {
+        if (strcmp(shortcut.sname, sname) == 0)
+        {
+            if (strcmp(shortcut.sname, EMPTY_STRING) == 0 && mode == REPLACE)
+                continue;
+            if (mode == REPLACE)
+                strcpy(shortcut.msg, msg);
+            else if (mode == READ)
+                strcpy(msg, shortcut.msg);
+            return 1;
+        }
+    }
+    puts("ERROR : INVALID SHORTCUT NAME!");
     return 0;
 }
