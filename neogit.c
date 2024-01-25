@@ -204,7 +204,6 @@ int main(int argc, char *argv[])
             int sfound = findShortcut(argv[3], msg, READ);
             if (sfound)
             {
-                puts(msg);
                 int commitNum = filelog();
                 commit(msg, commitNum, NULL);
                 snapshot();
@@ -251,6 +250,7 @@ int main(int argc, char *argv[])
         status(dir);
         statusD();
     }
+
     else if (!exAlias(argv[1]))
         INVCMD;
     return 0;
@@ -362,11 +362,12 @@ void init()
     FILE *status = fopen(".neogit\\status.neogit", "w");
     char branch[DATASTR_LEN] = "master";
     fwrite(branch, 1, DATASTR_LEN, status);
-    int head = 0;
-    fwrite(&head, sizeof(int), 1, status);
     fclose(status);
 
     CreateDirectory(".neogit\\master", NULL);
+    FILE *branchhead = fopen(".neogit\\master\\branchhead.neogit", "w");
+    fprintf(branchhead, "%d", 0);
+
     CreateDirectory(".neogit\\commits", NULL);
 }
 
@@ -674,17 +675,29 @@ void findHead()
 
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERORR: NOT IN A NEOGIT REPE!");
+        return;
+    }
+
     dirChange(dir, "status.neogit", 0);
-    int headid;
     FILE *status = fopen(dir, "r");
+    char branch[DATASTR_LEN];
     if (status == NULL)
     {
         puts("ERROR: UNABLE TO FIND STATUS FILE!");
         return;
     }
-    fseek(status, DATASTR_LEN, SEEK_SET);
-    fread(&headid, sizeof(int), 1, status);
+    fread(branch, 1, DATASTR_LEN, status);
     fclose(status);
+
+    dirChange(dir, branch, 1);
+    dirChange(dir, "branchhead.neogit", 0);
+    FILE *branchhead = fopen(dir, "r");
+    int headid;
+    fscanf(branchhead, "%d", &headid);
+
     for (int i = 0; i < commitCount; i++)
     {
         if (headid == commits[i].id)
@@ -743,6 +756,12 @@ void commit(char *msg, int num, Commit *merge)
     fwrite(curCommit, sizeof(Commit), 1, commitslog);
     head = curCommit;
     fclose(commitslog);
+
+    dirChange(dir, curCommit->branch, 1);
+    dirChange(dir, "branchhead.neogit", 0);
+    FILE *branchhead = fopen(dir, "w");
+    fprintf(branchhead, "%d", curCommit->id);
+    fclose(branchhead);
 }
 
 void snapshot()
@@ -1309,8 +1328,6 @@ void set(const char *sname, const char *msg)
     strcpy(shortcut.msg, msg);
     fwrite(&shortcut, sizeof(Shortcut), 1, shortcuts);
     fclose(shortcuts);
-    puts(shortcut.sname);
-    puts(shortcut.msg);
 }
 
 int findShortcut(const char *sname, char *msg, char mode)
