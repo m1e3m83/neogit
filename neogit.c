@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
     {
         findShortcut(argv[5], argv[3], REPLACE);
     }
-    else if (strcmp(argv[1], "remove") == 0 && strcmp(argv[2], "-s") && argc == 4)
+    else if (strcmp(argv[1], "remove") == 0 && strcmp(argv[2], "-s") == 0 && argc == 4)
     {
         findShortcut(argv[3], EMPTY_STRING, REPLACE);
     }
@@ -1333,8 +1333,6 @@ void set(const char *sname, const char *msg)
 int findShortcut(const char *sname, char *msg, char mode)
 {
     Shortcut shortcut;
-    strcpy(shortcut.sname, sname);
-    strcpy(shortcut.msg, msg);
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
     if (*dir == '\0')
@@ -1348,12 +1346,16 @@ int findShortcut(const char *sname, char *msg, char mode)
     {
         if (strcmp(shortcut.sname, sname) == 0)
         {
-            if (strcmp(shortcut.sname, EMPTY_STRING) == 0 && mode == REPLACE)
+            if (strcmp(shortcut.msg, EMPTY_STRING) == 0 && mode == READ)
                 continue;
+
             if (mode == REPLACE)
                 strcpy(shortcut.msg, msg);
             else if (mode == READ)
                 strcpy(msg, shortcut.msg);
+
+            fseek(shortcuts, -1 * sizeof(Shortcut), SEEK_CUR);
+            fwrite(&shortcut, sizeof(Shortcut), 1, shortcuts);
             return 1;
         }
     }
