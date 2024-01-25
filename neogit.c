@@ -1041,7 +1041,7 @@ void comlog(int(mode)(char *, Commit *), char *inp)
         if (mode(inp, commits + i))
         {
             struct tm *timeinfo = localtime(&commits[i].t);
-            printf("\tCommit %d made at %d:%d:%d in %d\\%d\\%d\n", commits[i].id, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec, timeinfo->tm_year + 1900, timeinfo->tm_mon + 1, timeinfo->tm_mday);
+            printf("\t Commit %d made at %d:%d:%d in %d\\%d\\%d\n", commits[i].id, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec, timeinfo->tm_year + 1900, timeinfo->tm_mon + 1, timeinfo->tm_mday);
             printf("\t\tOn branch \'%s\' :\n", commits[i].branch);
             printf("\t\t\"%s\"\n", commits[i].msg);
             printf("\t\t%s  %s\n", commits[i].authName, commits[i].authEmail);
