@@ -101,6 +101,9 @@ int logcw(char *, Commit *);
 void status(char *);
 void statusD();
 
+void branch();
+void createBranch(char *);
+
 int main(int argc, char *argv[])
 {
     loadCommits();
@@ -250,7 +253,17 @@ int main(int argc, char *argv[])
         status(dir);
         statusD();
     }
-
+    else if (strcmp(argv[1], "branch") == 0)
+    {
+        if (argc == 2)
+        {
+            branch();
+        }
+        else if (argc == 3)
+        {
+            createBranch(argv[2]);
+        }
+    }
     else if (!exAlias(argv[1]))
         INVCMD;
     return 0;
@@ -360,8 +373,7 @@ void init()
     puts("Initializing neogit repo in this directory.");
 
     FILE *status = fopen(".neogit\\status.neogit", "w");
-    char branch[DATASTR_LEN] = "master";
-    fwrite(branch, 1, DATASTR_LEN, status);
+    fprintf(status, "master");
     fclose(status);
 
     CreateDirectory(".neogit\\master", NULL);
@@ -1354,11 +1366,69 @@ int findShortcut(const char *sname, char *msg, char mode)
             else if (mode == READ)
                 strcpy(msg, shortcut.msg);
 
-            fseek(shortcuts, -1 * sizeof(Shortcut), SEEK_CUR);
+            fseek(shortcuts, (long)(-1 * sizeof(Shortcut)), SEEK_CUR);
             fwrite(&shortcut, sizeof(Shortcut), 1, shortcuts);
             return 1;
         }
     }
     puts("ERROR : INVALID SHORTCUT NAME!");
     return 0;
+}
+
+void createBranch(char *branchName)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return;
+    }
+
+    dirChange(dir, "status.neogit", 0);
+    FILE *status = fopen(dir, "w");
+    fprintf(status, "%s", branchName);
+    fclose(status);
+
+    dirChange(dir, branchName, 1);
+    CreateDirectory(dir, NULL);
+
+    dirChange(dir, "branchhead.neogit", 0);
+    FILE *branchhead = fopen(dir, "w");
+    fprintf(branchhead, "0");
+    fclose(branchhead);
+}
+
+void branch()
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return;
+    }
+
+    dirChange(dir, "status.neogit", 0);
+    FILE *status = fopen(dir, "r");
+    char branch[DATASTR_LEN];
+    fgets(branch, DATASTR_LEN, status);
+    fclose(status);
+
+    dirChange(dir, "*", 1);
+
+    WIN32_FIND_DATA findFileData;
+    HANDLE hFind = FindFirstFile(dir, &findFileData);
+    do
+    {
+        if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && strcmp(findFileData.cFileName, ".") != 0 &&
+            strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0 &&
+            strcmp(findFileData.cFileName, "commits") != 0 && findFileData.dwFileAttributes != INVALID_FILE_ATTRIBUTES)
+        {
+            printf("   %s", findFileData.cFileName);
+            if (strcmp(branch, findFileData.cFileName) == 0)
+                printf("  <-- current branch");
+            printf("\n");
+        }
+    } while (FindNextFile(hFind, &findFileData) != 0);
 }
