@@ -107,6 +107,7 @@ void branch();
 void createBranch(char *);
 
 void checkoutid(char *);
+void checkoutb(char *);
 
 int main(int argc, char *argv[])
 {
@@ -278,6 +279,34 @@ int main(int argc, char *argv[])
         if (isNum(argv[2]))
         {
             checkoutid(argv[2]);
+        }
+        else
+        {
+            if (strcmp(argv[2], "HEAD") == 0)
+            {
+                char id[DATASTR_LEN];
+                itoa(head->id, id, 10);
+                checkoutid(id);
+            }
+            else if (argv[2][0] == 'H' && argv[2][1] == 'E' && argv[2][2] == 'A' && argv[2][3] == 'D' && argv[2][4] == '-')
+            {
+                int n = 0;
+                Commit *tcom = head;
+                sscanf(argv[2] + 5, "%d", &n);
+                for (int i = 0; i < n; i++)
+                {
+                    if (tcom->pervCommit == NULL)
+                        break;
+                    tcom = tcom->pervCommit;
+                }
+                char id[DATASTR_LEN];
+                itoa(tcom->id, id, 10);
+                checkoutid(id);
+            }
+            else
+            {
+                checkoutb(argv[2]);
+            }
         }
     }
     else if (!exAlias(argv[1]))
@@ -1264,7 +1293,6 @@ void status(char *fileName)
             lastWriteTimeULarge.HighPart = lastWriteTime.dwHighDateTime;
 
             time_t lastWriteTimeInSeconds = (time_t)((lastWriteTimeULarge.QuadPart - 116444736000000000) / 10000000);
-
             if (lastWriteTimeInSeconds > fileinfo.lastCommit)
             {
                 Y = 'M';
@@ -1435,7 +1463,7 @@ void createBranch(char *branchName)
 
     dirChange(dir, "branchhead.neogit", 0);
     FILE *branchhead = fopen(dir, "w");
-    fprintf(branchhead, "0");
+    fprintf(branchhead, "%d", head->id);
     fclose(branchhead);
 }
 
@@ -1534,6 +1562,39 @@ void checkoutid(char *id)
     }
 
     CloseHandle(hFind);
+}
+
+void checkoutb(char *branch)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return;
+    }
+
+    dirChange(dir, branch, 0);
+    if (GetFileAttributes(dir) == INVALID_FILE_ATTRIBUTES || !(GetFileAttributes(dir) & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        puts("ERROR: INVALID BRANCH NAME!");
+        return;
+    }
+
+    dirChange(dir, "branchhead.neogit", 0);
+    char branchheadid[DATASTR_LEN];
+    FILE *branchhead = fopen(dir, "r");
+    fscanf(branchhead, "%s", branchheadid);
+    fclose(branchhead);
+
+    checkoutid(branchheadid);
+
+    dirChange(dir, "status.neogit", 2);
+    FILE *status = fopen(dir, "w");
+    fprintf(status, "%s", branch);
+    fclose(status);
+
+    findHead();
 }
 
 int isNum(char *str)
