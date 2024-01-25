@@ -44,13 +44,24 @@ struct fileinfo
 };
 typedef struct fileinfo Fileinfo;
 
+struct alias
+{
+    char aname[DATASTR_LEN];
+    char cmd[DATASTR_LEN];
+};
+typedef struct alias Alias;
+
 void dirChange(char *, char *, int);
 void findNeogitRep(char *);
 int copydir(char *, char *, char);
 void wildcard(char *, void(char *, char), char);
 
 void config(char, int, char *);
+void writeAlias(char *, char *, char);
+int exAlias(char *);
+
 void init();
+
 void add(char *, char);
 int checkPathInFIle(char *, char *);
 void redo();
@@ -82,7 +93,6 @@ int main(int argc, char *argv[])
 {
     loadCommits();
     findHead();
-
     if (strcmp(argv[1], "config") == 0 && (argc == 4 || argc == 5))
     {
         char mode = LOCAL;
@@ -93,6 +103,8 @@ int main(int argc, char *argv[])
                 config(GLOBAL, USER, argv[4]);
             else if (strcmp(argv[3], "user.email") == 0)
                 config(GLOBAL, EMAIL, argv[4]);
+            else if (argv[3][0] == 'a' && argv[3][1] == 'l' && argv[3][2] == 'i' && argv[3][3] == 'a' && argv[3][4] == 's' && argv[3][5] == '.' && argc == 5)
+                writeAlias(argv[3] + 6, argv[4], GLOBAL);
             else
                 INVCMD;
         }
@@ -100,6 +112,8 @@ int main(int argc, char *argv[])
             config(LOCAL, USER, argv[3]);
         else if (strcmp(argv[2], "user.email") == 0)
             config(LOCAL, EMAIL, argv[3]);
+        else if (argv[2][0] == 'a' && argv[2][1] == 'l' && argv[2][2] == 'i' && argv[2][3] == 'a' && argv[2][4] == 's' && argv[2][5] == '.' && argc == 4)
+            writeAlias(argv[2] + 6, argv[3], LOCAL);
         else
             INVCMD;
     }
@@ -159,9 +173,9 @@ int main(int argc, char *argv[])
         else
         {
             if (strrchr(argv[2], '$') != NULL)
-                wildcard(argv[2], add, '\0');
+                wildcard(argv[2], reset, '\0');
             else
-                add(argv[2], '\0');
+                reset(argv[2], '\0');
         }
     }
     else if (strcmp(argv[1], "commit") == 0 && strcmp(argv[2], "-m") == 0 && argc == 4)
@@ -198,7 +212,7 @@ int main(int argc, char *argv[])
         status(dir);
         statusD();
     }
-    else
+    else if (!exAlias(argv[1]))
         INVCMD;
     return 0;
 }
@@ -449,12 +463,11 @@ void reset(char *fileName, char nth)
         GetCurrentDirectory(DIRNAME_LEN, filedir);
         strcat(filedir, "\\");
         strcat(filedir, fileName);
-
         int d = checkPathInFIle(filedir, "stagedfiles.neogit");
 
         if (d == -1)
         {
-            puts("ERROR: NOT AN STAGED FILE!");
+            puts("ERROR: NOT AN STAGED FILE");
             return;
         }
 
@@ -1180,4 +1193,64 @@ void statusD()
         placement++;
         fseek(filelog, placement * sizeof(fileinfo), SEEK_SET);
     }
+}
+
+void writeAlias(char *name, char *cmd, char mode)
+{
+    Alias alias;
+    strcpy(alias.aname, name);
+    strcpy(alias.cmd, cmd);
+    char dir[DIRNAME_LEN];
+    if (mode == LOCAL)
+    {
+        findNeogitRep(dir);
+        dirChange(dir, "localalias.neogit", 0);
+    }
+    else if (mode == GLOBAL)
+    {
+        GetModuleFileName(NULL, dir, DIRNAME_LEN);
+        dirChange(dir, "aliasfile.neogit", 0);
+    }
+    FILE *aliasfile = fopen(dir, "a");
+    fwrite(&alias, sizeof(Alias), 1, aliasfile);
+    fclose(aliasfile);
+}
+
+int exAlias(char *inp)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    dirChange(dir, "localalias.neogit", 0);
+    FILE *aliasfile = fopen(dir, "r");
+    Alias alias;
+    int place = 0;
+    while (fread(&alias, sizeof(Alias), 1, aliasfile))
+    {
+        if (strcmp(alias.aname, inp) == 0)
+        {
+            char cmd[DATASTR_LEN] = "neogit ";
+            strcat(cmd, alias.cmd);
+            system(cmd);
+            return 1;
+        }
+        place++;
+        fseek(aliasfile, place * sizeof(Alias), SEEK_SET);
+    }
+    fclose(aliasfile);
+    GetModuleFileName(NULL, dir, DIRNAME_LEN);
+    dirChange(dir, "aliasfile.neogit", 0);
+    aliasfile = fopen(dir, "r");
+    while (fread(&alias, sizeof(Alias), 1, aliasfile))
+    {
+        if (strcmp(alias.aname, inp) == 0)
+        {
+            char cmd[DATASTR_LEN] = "neogit ";
+            strcat(cmd, alias.cmd);
+            system(cmd);
+            return 1;
+        }
+        place++;
+        fseek(aliasfile, place * sizeof(Alias), SEEK_SET);
+    }
+    return 0;
 }
