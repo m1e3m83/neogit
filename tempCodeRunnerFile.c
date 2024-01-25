@@ -1,2 +1,1 @@
-    // head->id = 10001;
-    // head->pervCommit = &commits[0];
+        copydir(comfilepath, main, COPY_ALL);

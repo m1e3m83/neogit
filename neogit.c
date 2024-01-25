@@ -65,6 +65,7 @@ void dirChange(char *, char *, int);
 void findNeogitRep(char *);
 int copydir(char *, char *, char);
 void wildcard(char *, void(char *, char), char);
+int isNum(char *);
 
 void config(char, int, char *);
 void writeAlias(char *, char *, char);
@@ -81,6 +82,7 @@ void fileSep();
 
 void loadCommits();
 void findHead();
+int checkstaged();
 void commit(char *, int, Commit *);
 void snapshot();
 int filelog();
@@ -103,6 +105,8 @@ void statusD();
 
 void branch();
 void createBranch(char *);
+
+void checkoutid(char *);
 
 int main(int argc, char *argv[])
 {
@@ -195,23 +199,28 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[1], "commit") == 0 && argc == 4)
     {
-        if (strcmp(argv[2], "-m") == 0)
+        if (checkstaged())
         {
-            int commitNum = filelog();
-            commit(argv[3], commitNum, NULL);
-            snapshot();
-        }
-        else if (strcmp(argv[2], "-s") == 0)
-        {
-            char msg[DIRNAME_LEN];
-            int sfound = findShortcut(argv[3], msg, READ);
-            if (sfound)
+            if (strcmp(argv[2], "-m") == 0)
             {
                 int commitNum = filelog();
-                commit(msg, commitNum, NULL);
+                commit(argv[3], commitNum, NULL);
                 snapshot();
             }
+            else if (strcmp(argv[2], "-s") == 0)
+            {
+                char msg[DIRNAME_LEN];
+                int sfound = findShortcut(argv[3], msg, READ);
+                if (sfound)
+                {
+                    int commitNum = filelog();
+                    commit(msg, commitNum, NULL);
+                    snapshot();
+                }
+            }
         }
+        else
+            puts("ERROR: NO FILE IS STAGED!");
     }
     else if (strcmp(argv[1], "set") == 0 && strcmp(argv[2], "-m") == 0 && strcmp(argv[4], "-s") == 0 && argc == 6)
     {
@@ -262,6 +271,13 @@ int main(int argc, char *argv[])
         else if (argc == 3)
         {
             createBranch(argv[2]);
+        }
+    }
+    else if (strcmp(argv[1], "checkout") == 0 && (argc == 3 || argc == 4))
+    {
+        if (isNum(argv[2]))
+        {
+            checkoutid(argv[2]);
         }
     }
     else if (!exAlias(argv[1]))
@@ -774,6 +790,30 @@ void commit(char *msg, int num, Commit *merge)
     FILE *branchhead = fopen(dir, "w");
     fprintf(branchhead, "%d", curCommit->id);
     fclose(branchhead);
+}
+
+int checkstaged()
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return 0;
+    }
+
+    dirChange(dir, "stagedfiles.neogit", 0);
+    FILE *stagedfiles = fopen(dir, "r");
+    int place = 0;
+    char stagedfiledir[DIRNAME_LEN];
+    while (fread(stagedfiledir, 1, DIRNAME_LEN, stagedfiles))
+    {
+        if (strcmp(stagedfiledir, EMPTY_STRING) != 0)
+            return 1;
+        place++;
+        fseek(stagedfiles, place * DIRNAME_LEN, SEEK_SET);
+    }
+    return 0;
 }
 
 void snapshot()
@@ -1431,4 +1471,78 @@ void branch()
             printf("\n");
         }
     } while (FindNextFile(hFind, &findFileData) != 0);
+}
+
+void checkoutid(char *id)
+{
+    char comfol[DIRNAME_LEN];
+    findNeogitRep(comfol);
+    if (*comfol == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return;
+    }
+
+    dirChange(comfol, "commits", 0);
+    dirChange(comfol, id, 0);
+
+    if (GetFileAttributes(comfol) == INVALID_FILE_ATTRIBUTES || !(GetFileAttributes(comfol) & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        puts("ERROR: NOT A VALID COMMIT ID!");
+        return;
+    }
+
+    char main[DIRNAME_LEN];
+    findNeogitRep(main);
+    char *lastbs = strrchr(main, '\\');
+    *lastbs = '\0';
+
+    char mainfilepath[DIRNAME_LEN];
+    strcpy(mainfilepath, main);
+    dirChange(mainfilepath, "*", 0);
+    WIN32_FIND_DATA findFileData;
+    HANDLE hFind = FindFirstFile(mainfilepath, &findFileData);
+    FindNextFile(hFind, &findFileData);
+    while (FindNextFile(hFind, &findFileData) != 0)
+    {
+        if (strcmp(findFileData.cFileName, ".neogit") != 0)
+        {
+            strcpy(mainfilepath, main);
+            dirChange(mainfilepath, findFileData.cFileName, 0);
+            char cmd[DATASTR_LEN];
+            if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+                strcpy(cmd, "rmdir /s /q ");
+            else
+                strcpy(cmd, "del ");
+            strcat(cmd, mainfilepath);
+            system(cmd);
+        }
+    }
+
+    char comfilepath[DIRNAME_LEN];
+    strcpy(comfilepath, comfol);
+    dirChange(comfilepath, "*", 0);
+
+    findFileData;
+    hFind = FindFirstFile(comfilepath, &findFileData);
+    FindNextFile(hFind, &findFileData);
+    while (FindNextFile(hFind, &findFileData) != 0)
+    {
+        strcpy(comfilepath, comfol);
+        dirChange(comfilepath, findFileData.cFileName, 0);
+        copydir(comfilepath, main, COPY_ALL);
+    }
+
+    CloseHandle(hFind);
+}
+
+int isNum(char *str)
+{
+    while (*str != '\0')
+    {
+        if (*str > '9' || *str < '0')
+            return 0;
+        str++;
+    }
+    return 1;
 }
