@@ -61,6 +61,17 @@ struct shortcut
 };
 typedef struct shortcut Shortcut;
 
+struct tag
+{
+    char name[DATASTR_LEN];
+    char msg[DATASTR_LEN];
+    int comid;
+    char authName[DATASTR_LEN];
+    char authEmail[DATASTR_LEN];
+    time_t createT;
+};
+typedef struct tag Tag;
+
 void dirChange(char *, char *, int);
 void findNeogitRep(char *);
 int copydir(char *, char *, char);
@@ -108,6 +119,9 @@ void createBranch(char *);
 
 void checkoutid(char *);
 void checkoutb(char *);
+
+void tag(char *, char *, char *, char);
+void showtag(char *);
 
 int main(int argc, char *argv[])
 {
@@ -308,6 +322,72 @@ int main(int argc, char *argv[])
                 checkoutb(argv[2]);
             }
         }
+    }
+    else if (strcmp(argv[1], "tag") == 0 && argc > 1 && argc < 10)
+    {
+        if (argc == 2)
+        {
+            showtag(NULL);
+        }
+        else if (strcmp(argv[2], "show") == 0 && argc == 4)
+        {
+            showtag(argv[3]);
+        }
+        else if (strcmp(argv[2], "-a") == 0)
+        {
+            if (argc > 4 && strcmp(argv[4], "-m") == 0)
+            {
+                if (argc > 6 && strcmp(argv[6], "-c") == 0)
+                {
+                    if (argc > 8 && strcmp(argv[8], "-f") == 0)
+                    {
+                        tag(argv[3], argv[5], argv[7], REPLACE);
+                    }
+                    else if (argc == 8)
+                    {
+                        tag(argv[3], argv[5], argv[7], 0);
+                    }
+                    else
+                        INVCMD;
+                }
+                else if (argc > 6 && strcmp(argv[6], "-f") == 0)
+                {
+                    tag(argv[3], argv[5], NULL, REPLACE);
+                }
+                else if (argc == 6)
+                {
+                    tag(argv[3], argv[5], NULL, 0);
+                }
+                else
+                    INVCMD;
+            }
+            else if (argc > 4 && strcmp(argv[4], "-c") == 0)
+            {
+
+                if (argc > 6 && strcmp(argv[6], "-f") == 0)
+                {
+                    tag(argv[3], NULL, argv[5], REPLACE);
+                }
+                else if (argc == 6)
+                {
+                    tag(argv[3], NULL, argv[5], 0);
+                }
+                else
+                    INVCMD;
+            }
+            else if (argc > 4 && strcmp(argv[4], "-f") == 0)
+            {
+                tag(argv[3], NULL, NULL, REPLACE);
+            }
+            else if (argc == 4)
+            {
+                tag(argv[3], NULL, NULL, 0);
+            }
+            else
+                INVCMD;
+        }
+        else
+            INVCMD;
     }
     else if (!exAlias(argv[1]))
         INVCMD;
@@ -1606,4 +1686,119 @@ int isNum(char *str)
         str++;
     }
     return 1;
+}
+
+void tag(char *name, char *msg, char *comid, char mode)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return;
+    }
+
+    dirChange(dir, "tags.neogit", 0);
+    FILE *tags = fopen(dir, "rb+");
+    if (tags == NULL)
+        tags = fopen(dir, "wb+");
+
+    Tag tag;
+    strcpy(tag.name, name);
+
+    dirChange(dir, "localconfigs.neogit", 1);
+    FILE *config = fopen(dir, "rb");
+    fread(&tag.authName, 1, DATASTR_LEN, config);
+    fread(&tag.authEmail, 1, DATASTR_LEN, config);
+    fclose(config);
+
+    time(&tag.createT);
+
+    if (msg == NULL)
+        *tag.msg = '\0';
+    else
+        strcpy(tag.msg, msg);
+
+    if (comid == NULL)
+        tag.comid = head->id;
+    else
+        sscanf(comid, "%d", &tag.comid);
+
+    // other info
+
+    Tag lestag[MAX_COMMIT_NUM];
+    int num = fread(lestag, sizeof(Tag), MAX_COMMIT_NUM, tags);
+
+    int i = 0;
+    for (; i < num; i++)
+    {
+        if (strcmp(tag.name, lestag[i].name) <= 0)
+        {
+            if (strcmp(tag.name, lestag[i].name) == 0 && mode != REPLACE) // shit
+                continue;
+            else
+                break;
+        }
+    }
+
+    rewind(tags);
+
+    if (i == 0)
+        fwrite(&tag, sizeof(Tag), 1, tags);
+    for (int j = 0; j < num; j++)
+    {
+        if (mode != REPLACE || j != i) // bug
+            fwrite(lestag + i, sizeof(Tag), 1, tags);
+        if (j + 1 == i)
+            fwrite(&tag, sizeof(Tag), 1, tags);
+    }
+
+    fclose(tags);
+}
+
+void showtag(char *name)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return;
+    }
+
+    dirChange(dir, "tags.neogit", 0);
+    FILE *tags = fopen(dir, "rb");
+    if (tags == NULL)
+    {
+        puts("ERROR: NO AVAILABLE TAGS!");
+        return;
+    }
+
+    Tag lestag[MAX_COMMIT_NUM];
+    int num = fread(lestag, sizeof(Tag), MAX_COMMIT_NUM, tags);
+
+    for (int i = 0; i < num; i++)
+    {
+        Tag *tag = lestag + i;
+        if (name == NULL)
+        {
+            struct tm *timeinfo = localtime(&tag->createT);
+            printf("\tTag \'%s\':\n\t\tcreated at %.2d:%.2d:%.2d on %d\\%.2d\\%.2d\n", tag->name, timeinfo->tm_hour,
+                   timeinfo->tm_min, timeinfo->tm_sec, timeinfo->tm_year - 100, timeinfo->tm_mon + 1, timeinfo->tm_mday);
+            if (*tag->msg != '\0')
+                printf("\t\t\"%s\"\n", tag->msg);
+            printf("\t\t%s %s\n", tag->authName, tag->authEmail);
+            printf("\t\tOn commit %d\n", tag->comid);
+        }
+        else if (strcmp(name, tag->name) == 0)
+        {
+            struct tm *timeinfo = localtime(&tag->createT);
+            printf("\tTag \'%s\':\n\t\tcreated at %.2d:%.2d:%.2d on %d\\%.2d\\%.2d\n", tag->name, timeinfo->tm_hour,
+                   timeinfo->tm_min, timeinfo->tm_sec, timeinfo->tm_year - 100, timeinfo->tm_mon + 1, timeinfo->tm_mday);
+            if (*tag->msg != '\0')
+                printf("\t\t\"%s\"\n", tag->msg);
+            printf("\t\t%s %s\n", tag->authName, tag->authEmail);
+            printf("\t\tOn commit %d\n", tag->comid);
+        }
+    }
 }
