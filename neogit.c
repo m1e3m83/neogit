@@ -1698,7 +1698,10 @@ void tag(char *name, char *msg, char *comid, char mode)
         return;
     }
 
-    dirChange(dir, "tags.neogit", 0);
+    dirChange(dir, "localconfigs.neogit", 0);
+    FILE *config = fopen(dir, "rb");
+
+    dirChange(dir, "tags.neogit", 1);
     FILE *tags = fopen(dir, "rb+");
     if (tags == NULL)
         tags = fopen(dir, "wb+");
@@ -1706,8 +1709,6 @@ void tag(char *name, char *msg, char *comid, char mode)
     Tag tag;
     strcpy(tag.name, name);
 
-    dirChange(dir, "localconfigs.neogit", 1);
-    FILE *config = fopen(dir, "rb");
     fread(&tag.authName, 1, DATASTR_LEN, config);
     fread(&tag.authEmail, 1, DATASTR_LEN, config);
     fclose(config);
@@ -1722,9 +1723,14 @@ void tag(char *name, char *msg, char *comid, char mode)
     if (comid == NULL)
         tag.comid = head->id;
     else
+    {
         sscanf(comid, "%d", &tag.comid);
-
-    // other info
+        if (tag.comid - 10000 >= commitCount)
+        {
+            puts("ERROR: INVALID COMMIT ID!");
+            return;
+        }
+    }
 
     Tag lestag[MAX_COMMIT_NUM];
     int num = fread(lestag, sizeof(Tag), MAX_COMMIT_NUM, tags);
@@ -1733,22 +1739,22 @@ void tag(char *name, char *msg, char *comid, char mode)
     for (; i < num; i++)
     {
         if (strcmp(tag.name, lestag[i].name) <= 0)
-        {
-            if (strcmp(tag.name, lestag[i].name) == 0 && mode != REPLACE) // shit
-                continue;
-            else
-                break;
-        }
+            break;
     }
+    printf("%d", i);
 
-    rewind(tags);
+    fclose(tags);
+    tags = fopen(dir, "wb");
 
     if (i == 0)
         fwrite(&tag, sizeof(Tag), 1, tags);
     for (int j = 0; j < num; j++)
     {
-        if (mode != REPLACE || j != i) // bug
-            fwrite(lestag + i, sizeof(Tag), 1, tags);
+        if (!(mode == REPLACE && strcmp(lestag[i].name, tag.name) == 0)) // bug
+        {
+            fwrite(lestag + j, sizeof(Tag), 1, tags);
+            printf("1");
+        }
         if (j + 1 == i)
             fwrite(&tag, sizeof(Tag), 1, tags);
     }
