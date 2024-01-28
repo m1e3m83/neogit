@@ -30,6 +30,7 @@ struct commit
     char authName[DATASTR_LEN];
     char authEmail[DATASTR_LEN];
     struct commit *pervCommit;
+    int prevcomid;
     struct commit *merge;
     time_t t;
     int num;
@@ -798,6 +799,9 @@ void loadCommits()
         while (fread(commits + count, sizeof(Commit), 1, commitslog))
             count++;
 
+    for (int i = 0; i < commitCount; i++)
+        commits[i].pervCommit = commits + (commits[i].prevcomid - 10000);
+
     commitCount = count;
     fclose(commitslog);
 }
@@ -876,13 +880,12 @@ void commit(char *msg, int num, Commit *merge)
     dirChange(dir, "status.neogit", 1);
     FILE *status = fopen(dir, "r+");
     fread(&curCommit->branch, 1, DATASTR_LEN, status);
-    fseek(status, DATASTR_LEN, SEEK_SET);
-    fwrite(&(curCommit->id), sizeof(int), 1, status);
     fclose(status);
 
     time(&curCommit->t);
 
     curCommit->pervCommit = head;
+    curCommit->prevcomid = head->id;
 
     curCommit->merge = merge;
 
@@ -1642,6 +1645,15 @@ void checkoutid(char *id)
     }
 
     CloseHandle(hFind);
+
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    dirChange(dir, "stagedfiles.neogit", 0);
+    FILE *stagedfiles = fopen(dir, "w");
+    dirChange(dir, "resetfiles.neogit", 1);
+    FILE *resetfiles = fopen(dir, "w");
+    fclose(stagedfiles);
+    fclose(resetfiles);
 }
 
 void checkoutb(char *branch)
@@ -1741,7 +1753,6 @@ void tag(char *name, char *msg, char *comid, char mode)
         if (strcmp(tag.name, lestag[i].name) <= 0)
             break;
     }
-    printf("%d", i);
 
     fclose(tags);
     tags = fopen(dir, "wb");
@@ -1751,10 +1762,7 @@ void tag(char *name, char *msg, char *comid, char mode)
     for (int j = 0; j < num; j++)
     {
         if (!(mode == REPLACE && strcmp(lestag[i].name, tag.name) == 0)) // bug
-        {
             fwrite(lestag + j, sizeof(Tag), 1, tags);
-            printf("1");
-        }
         if (j + 1 == i)
             fwrite(&tag, sizeof(Tag), 1, tags);
     }
