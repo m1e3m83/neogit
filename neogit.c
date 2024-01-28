@@ -14,6 +14,7 @@
 
 #define REPLACE 1
 #define READ 2
+#define NO_REPLACE 2
 
 #define DATASTR_LEN 128
 #define DIRNAME_LEN 128
@@ -133,6 +134,8 @@ void diff(char *, char *);
 void printline(char *, int, int);
 char *findprintable(char *);
 int findtokenlen(char *, char *);
+void commitdiff(char *, char *);
+void findcomfiles(char *, char *, char *, char *, char);
 
 int main(int argc, char *argv[])
 {
@@ -2029,4 +2032,83 @@ void setTextColor(int colorCode)
 {
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     SetConsoleTextAttribute(hConsole, colorCode);
+}
+
+void commitdiff(char *com1, char *com2)
+{
+    char dir1[DIRNAME_LEN];
+    findNeogitRep(dir1);
+    if (dir1 == NULL)
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return;
+    }
+    dirChange(dir1, "commits", 0);
+    dirChange(dir1, com1, 0);
+    if (GetFileAttributes(dir1) == INVALID_FILE_ATTRIBUTES || !(GetFileAttributes(dir1) & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        puts("ERROR: INVALID COMMIT ID!");
+        return;
+    }
+    char root[DIRNAME_LEN] = "";
+
+    char dir2[DIRNAME_LEN];
+    findNeogitRep(dir2);
+    dirChange(dir2, "commits", 0);
+    dirChange(dir2, com2, 0);
+    if (GetFileAttributes(dir1) == INVALID_FILE_ATTRIBUTES || !(GetFileAttributes(dir1) & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        puts("ERROR: INVALID COMMIT ID!");
+        return;
+    }
+
+    findcomfiles(dir1, dir2, root, com1, NO_REPLACE);
+    findcomfiles(dir2, dir1, root, com2, REPLACE);
+}
+
+void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode)
+{
+    if ((GetFileAttributes(path1) & FILE_ATTRIBUTE_DIRECTORY) && (GetFileAttributes(path1) != INVALID_FILE_ATTRIBUTES))
+    {
+        dirChange(path1, "*", 0);
+
+        WIN32_FIND_DATA findFileData;
+        HANDLE hFind = FindFirstFile(path1, &findFileData);
+        FindNextFile(hFind, &findFileData);
+        while (FindNextFile(hFind, &findFileData) != 0)
+        {
+            char path[DIRNAME_LEN];
+            char rootpath[DIRNAME_LEN];
+            strcpy(path, path1);
+            dirChange(path, findFileData.cFileName, 1);
+
+            strcpy(rootpath, root);
+            dirChange(rootpath, findFileData.cFileName, 0);
+
+            findcomfiles(path, path2, rootpath, comid, mode);
+        }
+        FindClose(hFind);
+        return;
+    }
+    else
+    {
+        root++;
+        char tdir[DIRNAME_LEN];
+        strcpy(tdir, path2);
+        dirChange(tdir, root, 0);
+        if (GetFileAttributes(tdir) == INVALID_FILE_ATTRIBUTES && (GetFileAttributes(tdir) & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            printf("exclusively in commit %s\n", comid);
+            printf("    ");
+            puts(root);
+            return;
+        }
+        else if (mode == REPLACE)
+            return;
+        else
+        {
+            diff(path1, tdir);
+            return;
+        }
+    }
 }
