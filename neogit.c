@@ -1844,21 +1844,27 @@ void diff(char *file1dir, char *file2dir)
 
     int line1num = 0;
     int line2num = 0;
-    while (fgets(l1, DATASTR_LEN, file1) && fgets(l2, DATASTR_LEN, file2))
+    while (!feof(file1) && !feof(file2))
     {
+        fgets(l1, DATASTR_LEN, file1);
+        fgets(l2, DATASTR_LEN, file2);
         line1num++;
         line2num++;
 
-        *strrchr(l1, '\n') = '\0';
+        if (strrchr(l1, '\n') != NULL)
+            *strrchr(l1, '\n') = '\0';
         char *w1 = findprintable(l1);
-        *strrchr(l2, '\n') = '\0';
+
+        if (strrchr(l2, '\n') != NULL)
+            *strrchr(l2, '\n') = '\0';
         char *w2 = findprintable(l2);
 
         while (w1 == NULL)
         {
             if (fgets(l1, DATASTR_LEN, file1))
             {
-                *strrchr(l1, '\n') = '\0';
+                if (strrchr(l1, '\n') != NULL)
+                    *strrchr(l1, '\n') = '\0';
                 w1 = findprintable(l1);
                 line1num++;
             }
@@ -1869,14 +1875,14 @@ void diff(char *file1dir, char *file2dir)
         {
             if (fgets(l2, DATASTR_LEN, file2))
             {
-                *strrchr(l2, '\n') = '\0';
+                if (strrchr(l2, '\n') != NULL)
+                    *strrchr(l2, '\n') = '\0';
                 w2 = findprintable(l2);
                 line2num++;
             }
             else
                 break;
         }
-
         int diffnum = 0;
         int wordnum = -1;
         int lastdiffword = -1;
@@ -1915,9 +1921,6 @@ void diff(char *file1dir, char *file2dir)
             printline(l2, diffnum, lastdiffword);
             setTextColor(WHITE);
         }
-
-        strcpy(l1, "\n");
-        strcpy(l2, "\n");
     }
 
     char line[DATASTR_LEN];
@@ -1926,7 +1929,12 @@ void diff(char *file1dir, char *file2dir)
     {
         line1num++;
 
-        *strrchr(line, '\n') = '\0';
+        if (strrchr(line, '\n') != NULL)
+            *strrchr(line, '\n') = '\0';
+
+        if (findprintable(line) == NULL)
+            continue;
+
         printf("%s -> line %d :\n    ", file1dir, line1num);
 
         setTextColor(RED);
@@ -1937,7 +1945,12 @@ void diff(char *file1dir, char *file2dir)
     {
         line2num++;
 
-        *strrchr(line, '\n') = '\0';
+        if (strrchr(line, '\n') != NULL)
+            *strrchr(line, '\n') = '\0';
+
+        if (findprintable(line) == NULL)
+            continue;
+
         printf("%s -> line %d :\n    ", file2dir, line2num);
 
         setTextColor(GREEN);
