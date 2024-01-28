@@ -20,6 +20,10 @@
 #define EMPTY_STRING "THIS IS AN EMPTY STRING DESIGNED TO REWRITE THE OTHER STRING THAT LAYED IN HERE. RIP DEAR OLD STRING, ALL HAIL THE NEW STRING. "
 #define MAX_COMMIT_NUM 1000
 
+#define RED 4
+#define GREEN 2
+#define WHITE 7
+
 #define INVCMD puts("Invalid cmd :/")
 
 struct commit
@@ -78,6 +82,7 @@ void findNeogitRep(char *);
 int copydir(char *, char *, char);
 void wildcard(char *, void(char *, char), char);
 int isNum(char *);
+void setTextColor(int);
 
 void config(char, int, char *);
 void writeAlias(char *, char *, char);
@@ -123,6 +128,11 @@ void checkoutb(char *);
 
 void tag(char *, char *, char *, char);
 void showtag(char *);
+
+void diff(char *, char *);
+void printline(char *, int, int);
+char *findprintable(char *);
+int findtokenlen(char *, char *);
 
 int main(int argc, char *argv[])
 {
@@ -389,6 +399,13 @@ int main(int argc, char *argv[])
         }
         else
             INVCMD;
+    }
+    else if (strcmp(argv[1], "diff") == 0 && argc > 2)
+    {
+        if (strcmp(argv[2], "-f") == 0 && argc == 5)
+        {
+            diff(argv[3], argv[4]);
+        }
     }
     else if (!exAlias(argv[1]))
         INVCMD;
@@ -1815,4 +1832,188 @@ void showtag(char *name)
             printf("\t\tOn commit %d\n", tag->comid);
         }
     }
+}
+
+void diff(char *file1dir, char *file2dir)
+{
+    FILE *file1 = fopen(file1dir, "r");
+    FILE *file2 = fopen(file2dir, "r");
+
+    char l1[DATASTR_LEN];
+    char l2[DATASTR_LEN];
+
+    int line1num = 0;
+    int line2num = 0;
+    while (fgets(l1, DATASTR_LEN, file1) && fgets(l2, DATASTR_LEN, file2))
+    {
+        line1num++;
+        line2num++;
+
+        *strrchr(l1, '\n') = '\0';
+        char *w1 = findprintable(l1);
+        *strrchr(l2, '\n') = '\0';
+        char *w2 = findprintable(l2);
+
+        while (w1 == NULL)
+        {
+            if (fgets(l1, DATASTR_LEN, file1))
+            {
+                *strrchr(l1, '\n') = '\0';
+                w1 = findprintable(l1);
+                line1num++;
+            }
+            else
+                break;
+        }
+        while (w2 == NULL)
+        {
+            if (fgets(l2, DATASTR_LEN, file2))
+            {
+                *strrchr(l2, '\n') = '\0';
+                w2 = findprintable(l2);
+                line2num++;
+            }
+            else
+                break;
+        }
+
+        int diffnum = 0;
+        int wordnum = -1;
+        int lastdiffword = -1;
+        do
+        {
+            wordnum++;
+            if (w2 == NULL || (w1 != NULL && strncmp(w1, w2, findtokenlen(w1, w2)) != 0))
+            {
+                diffnum++;
+                lastdiffword = wordnum;
+            }
+            else if (w1 == NULL || strncmp(w1, w2, findtokenlen(w1, w2)) != 0)
+            {
+                diffnum++;
+                lastdiffword = wordnum;
+            }
+
+            if (w1 != NULL)
+                w1 = findprintable(strstr(w1, " "));
+            if (w2 != NULL)
+                w2 = findprintable(strstr(w2, " "));
+
+        } while (w1 || w2);
+
+        if (diffnum > 0)
+        {
+            printf("%s -> line %d :\n    ", file1dir, line1num);
+
+            setTextColor(RED);
+            printline(l1, diffnum, lastdiffword);
+            setTextColor(WHITE);
+
+            printf("%s -> line %d :\n    ", file2dir, line2num);
+
+            setTextColor(GREEN);
+            printline(l2, diffnum, lastdiffword);
+            setTextColor(WHITE);
+        }
+
+        strcpy(l1, "\n");
+        strcpy(l2, "\n");
+    }
+
+    char line[DATASTR_LEN];
+
+    while (fgets(line, DATASTR_LEN, file1))
+    {
+        line1num++;
+
+        *strrchr(line, '\n') = '\0';
+        printf("%s -> line %d :\n    ", file1dir, line1num);
+
+        setTextColor(RED);
+        printline(line, -1, -1);
+        setTextColor(WHITE);
+    }
+    while (fgets(line, DATASTR_LEN, file2))
+    {
+        line2num++;
+
+        *strrchr(line, '\n') = '\0';
+        printf("%s -> line %d :\n    ", file2dir, line2num);
+
+        setTextColor(GREEN);
+        printline(line, -1, -1);
+        setTextColor(WHITE);
+    }
+
+    fclose(file1);
+    fclose(file2);
+}
+
+void printline(char *lc, int diffnum, int lastdiffword)
+{
+    int wordcount = 0;
+    while (*lc != '\0')
+    {
+        while (*lc == ' ' && *lc != '\0')
+        {
+            printf("%c", *lc);
+            lc++;
+        }
+        if (lastdiffword == wordcount && diffnum == 1)
+            ///////////////////////////////////////////////////////////////
+            /////////////////////A MOMENT OF SILENCE//////////////////////
+            ///////////////////////FOR ALL THOSE/////////////////////////
+            /////////////////////WHO FELL FIGHTING//////////////////////
+            //////////////////////AGAINST FACISM///////////////////////
+            ///////////////////////:((((((((((////////////////////////
+            /////////////////////////////////////////////////////////
+            printf(">>");
+        while (*lc != ' ' && *lc != '\0')
+        {
+            printf("%c", *lc);
+            lc++;
+        }
+        if (lastdiffword == wordcount && diffnum == 1)
+            printf("<<");
+        wordcount++;
+    }
+    printf("\n");
+}
+
+char *findprintable(char *ptr)
+{
+    if (ptr == NULL)
+        return NULL;
+    while (*ptr == ' ' || *ptr == '\0')
+        if (*ptr == '\0')
+            return NULL;
+        else
+            ptr++;
+    return ptr;
+}
+
+int findtokenlen(char *ptr, char *nptr)
+{
+    int i = 0;
+    while (*ptr != ' ' && *ptr != '\0')
+    {
+        ptr++;
+        i++;
+    }
+    int j = 0;
+    while (*nptr != ' ' && *nptr != '\0')
+    {
+        nptr++;
+        j++;
+    }
+    if (i > j)
+        return i;
+    else
+        return j;
+}
+
+void setTextColor(int colorCode)
+{
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleTextAttribute(hConsole, colorCode);
 }
