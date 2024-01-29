@@ -286,8 +286,7 @@ int main(int argc, char *argv[])
     {
         char dir[DIRNAME_LEN];
         findNeogitRep(dir);
-        char *lastbs = strrchr(dir, '\\');
-        *lastbs = '\0';
+        *strrchr(dir, '\\') = '\0';
         status(dir);
         statusD();
     }
@@ -1432,7 +1431,6 @@ void statusD()
     Fileinfo fileinfo;
     while (fread(&fileinfo, sizeof(Fileinfo), 1, filelog))
     {
-        puts(fileinfo.path);
         if (GetFileAttributes(fileinfo.path) == INVALID_FILE_ATTRIBUTES && strcmp(fileinfo.path, EMPTY_STRING) != 0)
         {
             char Y = 'D';
