@@ -15,6 +15,7 @@
 #define REPLACE 1
 #define READ 2
 #define NO_REPLACE 2
+#define MERGE 4
 
 #define DATASTR_LEN 128
 #define DIRNAME_LEN 128
@@ -130,7 +131,7 @@ void checkoutb(char *);
 void tag(char *, char *, char *, char);
 void showtag(char *);
 
-void diff(char *, char *);
+int diff(char *, char *);
 void printline(char *, int, int);
 char *findprintable(char *);
 int findtokenlen(char *, char *);
@@ -1847,7 +1848,7 @@ void showtag(char *name)
     }
 }
 
-void diff(char *file1dir, char *file2dir)
+int diff(char *file1dir, char *file2dir)
 {
     FILE *file1 = fopen(file1dir, "r");
     FILE *file2 = fopen(file2dir, "r");
@@ -1857,6 +1858,7 @@ void diff(char *file1dir, char *file2dir)
 
     int line1num = 0;
     int line2num = 0;
+    int diffnum = 0;
     while (!feof(file1) && !feof(file2))
     {
         fgets(l1, DATASTR_LEN, file1);
@@ -1896,7 +1898,6 @@ void diff(char *file1dir, char *file2dir)
             else
                 break;
         }
-        int diffnum = 0;
         int wordnum = -1;
         int lastdiffword = -1;
         do
@@ -1959,6 +1960,7 @@ void diff(char *file1dir, char *file2dir)
         setTextColor(WHITE);
         puts("<<<<<<");
         puts("");
+        diffnum++;
     }
     while (fgets(line, DATASTR_LEN, file2))
     {
@@ -1978,10 +1980,12 @@ void diff(char *file1dir, char *file2dir)
         setTextColor(WHITE);
         puts("<<<<<<");
         puts("");
+        diffnum++;
     }
 
     fclose(file1);
     fclose(file2);
+    return diffnum;
 }
 
 void printline(char *lc, int diffnum, int lastdiffword)
@@ -2167,4 +2171,52 @@ void merge(char *branch1, char *branch2)
     fclose(branchhead);
 
     // a mec to compare files in two commits
+}
+
+int mergecomfiles(char *path1, char *path2, char *root, char *comid, char mode)
+{
+    if ((GetFileAttributes(path1) & FILE_ATTRIBUTE_DIRECTORY) && (GetFileAttributes(path1) != INVALID_FILE_ATTRIBUTES))
+    {
+        char path[DIRNAME_LEN];
+        strcpy(path, path1);
+        dirChange(path, "*", 0);
+
+        WIN32_FIND_DATA findFileData;
+        HANDLE hFind = FindFirstFile(path, &findFileData);
+        FindNextFile(hFind, &findFileData);
+        int conflict = 0;
+        while (FindNextFile(hFind, &findFileData) != 0)
+        {
+            dirChange(path, findFileData.cFileName, 1);
+
+            char rootpath[DIRNAME_LEN];
+            strcpy(rootpath, root);
+            dirChange(rootpath, findFileData.cFileName, 0);
+
+            conflict += mergecomfiles(path, path2, rootpath, comid, mode);
+        }
+        FindClose(hFind);
+        return conflict;
+    }
+    else
+    {
+        root++;
+        char tardir[DIRNAME_LEN];
+        strcpy(tardir, path2);
+        dirChange(tardir, root, 0);
+        if (GetFileAttributes(tardir) == INVALID_FILE_ATTRIBUTES || (GetFileAttributes(tdir) & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            CopyFile(path1, tardir, 0);
+            return 0;
+        }
+        else if (mode == REPLACE)
+            return;
+        else
+        {
+            if (diff(path1, tardir))
+                return 1;
+            else
+                return 0;
+        }
+    }
 }
