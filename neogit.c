@@ -2131,3 +2131,40 @@ void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode)
         }
     }
 }
+
+void merge(char *branch1, char *branch2)
+{
+    char newComdir[DIRNAME_LEN];
+    findNeogitRep(newComdir);
+    if (*newComdir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return;
+    }
+
+    char b1head[DIRNAME_LEN];
+    findNeogitRep(b1head);
+    dirChange(b1head, branch1, 0);
+    dirChange(b1head, "branchhead.neogit", 0);
+    FILE *branchhead = fopen(b1head, "r");
+    fscanf(branchhead, "%s", b1head);
+    char b1hdir[DIRNAME_LEN];
+    findNeogitRep(b1hdir);
+    dirChange(b1hdir, "commits", 0);
+    dirChange(b1hdir, b1head, 0);
+    fclose(branchhead);
+
+    char b2head[DIRNAME_LEN];
+    findNeogitRep(b2head);
+    dirChange(b2head, branch2, 0);
+    dirChange(b2head, "branchhead.neogit", 0);
+    branchhead = fopen(b2head, "r");
+    fscanf(branchhead, "%s", b2head);
+    char b2hdir[DIRNAME_LEN];
+    findNeogitRep(b2hdir);
+    dirChange(b2hdir, "commits", 0);
+    dirChange(b2hdir, b2head, 0);
+    fclose(branchhead);
+
+    // a mec to compare files in two commits
+}
