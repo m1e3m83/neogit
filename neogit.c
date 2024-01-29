@@ -409,6 +409,12 @@ int main(int argc, char *argv[])
         {
             diff(argv[3], argv[4]);
         }
+        else if (strcmp(argv[2], "-c") == 0 && argc == 5)
+        {
+            commitdiff(argv[3], argv[4]);
+        }
+        else
+            INVCMD;
     }
     else if (!exAlias(argv[1]))
         INVCMD;
@@ -820,7 +826,10 @@ void loadCommits()
             count++;
 
     for (int i = 0; i < commitCount; i++)
-        commits[i].pervCommit = commits + (commits[i].prevcomid - 10000);
+        if (commits[i].prevcomid != 0)
+            commits[i].pervCommit = commits + (commits[i].prevcomid - 10000);
+        else
+            commits[i].pervCommit = NULL;
 
     commitCount = count;
     fclose(commitslog);
@@ -905,8 +914,10 @@ void commit(char *msg, int num, Commit *merge)
     time(&curCommit->t);
 
     curCommit->pervCommit = head;
-    curCommit->prevcomid = head->id;
-
+    if (head != NULL)
+        curCommit->prevcomid = head->id;
+    else
+        curCommit->prevcomid = 0;
     curCommit->merge = merge;
 
     dirChange(dir, "commitslog.neogit", 1);
@@ -1421,6 +1432,7 @@ void statusD()
     Fileinfo fileinfo;
     while (fread(&fileinfo, sizeof(Fileinfo), 1, filelog))
     {
+        puts(fileinfo.path);
         if (GetFileAttributes(fileinfo.path) == INVALID_FILE_ATTRIBUTES && strcmp(fileinfo.path, EMPTY_STRING) != 0)
         {
             char Y = 'D';
@@ -1912,6 +1924,7 @@ void diff(char *file1dir, char *file2dir)
 
         if (diffnum > 0)
         {
+            puts(">>>>>>");
             printf("%s -> line %d :\n    ", file1dir, line1num);
 
             setTextColor(RED);
@@ -1923,6 +1936,8 @@ void diff(char *file1dir, char *file2dir)
             setTextColor(GREEN);
             printline(l2, diffnum, lastdiffword);
             setTextColor(WHITE);
+            puts("<<<<<<");
+            puts("");
         }
     }
 
@@ -1938,11 +1953,14 @@ void diff(char *file1dir, char *file2dir)
         if (findprintable(line) == NULL)
             continue;
 
+        puts(">>>>>>");
         printf("%s -> line %d :\n    ", file1dir, line1num);
 
         setTextColor(RED);
         printline(line, -1, -1);
         setTextColor(WHITE);
+        puts("<<<<<<");
+        puts("");
     }
     while (fgets(line, DATASTR_LEN, file2))
     {
@@ -1954,11 +1972,14 @@ void diff(char *file1dir, char *file2dir)
         if (findprintable(line) == NULL)
             continue;
 
+        puts(">>>>>>");
         printf("%s -> line %d :\n    ", file2dir, line2num);
 
         setTextColor(GREEN);
         printline(line, -1, -1);
         setTextColor(WHITE);
+        puts("<<<<<<");
+        puts("");
     }
 
     fclose(file1);
@@ -2070,18 +2091,18 @@ void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode)
 {
     if ((GetFileAttributes(path1) & FILE_ATTRIBUTE_DIRECTORY) && (GetFileAttributes(path1) != INVALID_FILE_ATTRIBUTES))
     {
-        dirChange(path1, "*", 0);
+        char path[DIRNAME_LEN];
+        strcpy(path, path1);
+        dirChange(path, "*", 0);
 
         WIN32_FIND_DATA findFileData;
-        HANDLE hFind = FindFirstFile(path1, &findFileData);
+        HANDLE hFind = FindFirstFile(path, &findFileData);
         FindNextFile(hFind, &findFileData);
         while (FindNextFile(hFind, &findFileData) != 0)
         {
-            char path[DIRNAME_LEN];
-            char rootpath[DIRNAME_LEN];
-            strcpy(path, path1);
             dirChange(path, findFileData.cFileName, 1);
 
+            char rootpath[DIRNAME_LEN];
             strcpy(rootpath, root);
             dirChange(rootpath, findFileData.cFileName, 0);
 
@@ -2096,9 +2117,9 @@ void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode)
         char tdir[DIRNAME_LEN];
         strcpy(tdir, path2);
         dirChange(tdir, root, 0);
-        if (GetFileAttributes(tdir) == INVALID_FILE_ATTRIBUTES && (GetFileAttributes(tdir) & FILE_ATTRIBUTE_DIRECTORY))
+        if (GetFileAttributes(tdir) == INVALID_FILE_ATTRIBUTES || (GetFileAttributes(tdir) & FILE_ATTRIBUTE_DIRECTORY))
         {
-            printf("exclusively in commit %s\n", comid);
+            printf("Was in repo exclusively in commit %s\n", comid);
             printf("    ");
             puts(root);
             return;
