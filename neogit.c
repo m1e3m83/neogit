@@ -423,6 +423,23 @@ int main(int argc, char *argv[])
     {
         merge(argv[3], argv[4]);
     }
+    else if (strcmp(argv[1], "revert") == 0 && argc > 2)
+    {
+        if (strcmp(argv[2], "-m") == 0 && argc == 5)
+        {
+            revert(argv[4], argv[3]);
+        }
+        else if (strcmp(argv[2], "-n") == 0 && argc == 4)
+        {
+            checkoutid(argv[3]);
+        }
+        else if (argc == 3 && isNum(argv[2]))
+        {
+            revert(argv[2], NULL);
+        }
+        else
+            revert(argv[2], NULL);
+    }
     else if (!exAlias(argv[1]))
         INVCMD;
     return 0;
