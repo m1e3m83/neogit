@@ -2273,3 +2273,42 @@ int copymerge(char *src, char *dest, char *commitid)
         }
     }
 }
+
+void revert(char *id, char *msg)
+{
+    char dir[DIRNAME_LEN];
+    int bsnum = findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return;
+    }
+    dirChange(dir, "commits", 0);
+    dirChange(dir, id, 0);
+    if (GetFileAttributes(dir) == INVALID_FILE_ATTRIBUTES || !(GetFileAttributes(dir) & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        puts("ERROR: INVALID COMMIT ID!");
+        return;
+    }
+
+    if (msg == NULL)
+    {
+        char temp[DATASTR_LEN];
+        msg = temp;
+        strcpy(msg, commits[atoi(id) - 10000].msg);
+    }
+
+    char reldir[DIRNAME_LEN] = "*$";
+    for (int i = 0; i < bsnum; i++)
+    {
+        char temp[DIRNAME_LEN] = "";
+        sprintf(temp, "..\\%s", reldir);
+        strcpy(reldir, temp);
+    }
+
+    checkoutid(id);
+    wildcard(reldir, add, '\0');
+    int num = filelog();
+    commit(msg, num, NULL);
+    snapshot();
+}
