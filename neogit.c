@@ -2138,82 +2138,104 @@ void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode)
 
 void merge(char *branch1, char *branch2)
 {
-    char newComdir[DIRNAME_LEN];
-    findNeogitRep(newComdir);
-    if (*newComdir == '\0')
+    char root[DIRNAME_LEN];
+    findNeogitRep(root);
+    if (*root == '\0')
     {
         puts("ERROR: NOT IN A NEOGIT REPO!");
         return;
     }
+    *strrchr(root, '\\') = '\0';
 
-    char b1head[DIRNAME_LEN];
-    findNeogitRep(b1head);
-    dirChange(b1head, branch1, 0);
-    dirChange(b1head, "branchhead.neogit", 0);
-    FILE *branchhead = fopen(b1head, "r");
-    fscanf(branchhead, "%s", b1head);
     char b1hdir[DIRNAME_LEN];
+    char b1headid[DATASTR_LEN];
     findNeogitRep(b1hdir);
-    dirChange(b1hdir, "commits", 0);
-    dirChange(b1hdir, b1head, 0);
+    dirChange(b1hdir, branch1, 0);
+    dirChange(b1hdir, "branchhead.neogit", 0);
+    FILE *branchhead = fopen(b1hdir, "r");
+    fscanf(branchhead, "%s", b1headid);
+    dirChange(b1hdir, "commits", 2);
+    dirChange(b1hdir, b1headid, 0);
     fclose(branchhead);
 
-    char b2head[DIRNAME_LEN];
-    findNeogitRep(b2head);
-    dirChange(b2head, branch2, 0);
-    dirChange(b2head, "branchhead.neogit", 0);
-    branchhead = fopen(b2head, "r");
-    fscanf(branchhead, "%s", b2head);
     char b2hdir[DIRNAME_LEN];
+    char b2headid[DATASTR_LEN];
     findNeogitRep(b2hdir);
-    dirChange(b2hdir, "commits", 0);
-    dirChange(b2hdir, b2head, 0);
+    dirChange(b2hdir, branch2, 0);
+    dirChange(b2hdir, "branchhead.neogit", 0);
+    FILE *branchhead = fopen(b2hdir, "r");
+    fscanf(branchhead, "%s", b2headid);
+    dirChange(b2hdir, "commits", 2);
+    dirChange(b2hdir, b2headid, 0);
     fclose(branchhead);
 
-    // a mec to compare files in two commits
+    checkoutid(b1headid);
+
+    int conflict = copymerge(b1hdir, b2hdir, b2headid);
+    if (conflict)
+    {
+        puts("ERROR: CONFLICT! MERGE ABORTED!");
+        char headid[DATASTR_LEN];
+        sprintf(headid, "%d", head->id);
+        checkoutid(headid);
+        return;
+    }
+
+    // add and commit repo
 }
 
-int mergecomfiles(char *path1, char *path2, char *root, char *comid, char mode)
+int copymerge(char *src, char *dest, char *commitid)
 {
-    if ((GetFileAttributes(path1) & FILE_ATTRIBUTE_DIRECTORY) && (GetFileAttributes(path1) != INVALID_FILE_ATTRIBUTES))
+    if (GetFileAttributes(src) == INVALID_FILE_ATTRIBUTES)
     {
-        char path[DIRNAME_LEN];
-        strcpy(path, path1);
-        dirChange(path, "*", 0);
+        fputs("ERROR: INVALID COMMIT ID", stdout);
+        return 1;
+    }
+    else if (GetFileAttributes(src) & FILE_ATTRIBUTE_DIRECTORY)
+    {
+        // finding the name of the folder and creating it
+        char *lastbs = strrchr(src, '\\');
+        char foldername[DIRNAME_LEN];
+        strcpy(foldername, dest);
+        if (strcmp(lastbs + 1, commitid) != 0)
+        {
+            strcat(foldername, lastbs);
+            if (GetFileAttributes(foldername) == INVALID_FILE_ATTRIBUTES || !(GetFileAttributes(foldername) & FILE_ATTRIBUTE_DIRECTORY))
+                CreateDirectory(foldername, NULL);
+        } // coping commitd folder path and searching its contents
+        char subfilepath[DIRNAME_LEN];
+        strcpy(subfilepath, src);
 
+        dirChange(subfilepath, "*", 0);
         WIN32_FIND_DATA findFileData;
-        HANDLE hFind = FindFirstFile(path, &findFileData);
+        HANDLE hFind = FindFirstFile(subfilepath, &findFileData);
         FindNextFile(hFind, &findFileData);
+
         int conflict = 0;
         while (FindNextFile(hFind, &findFileData) != 0)
         {
-            dirChange(path, findFileData.cFileName, 1);
-
-            char rootpath[DIRNAME_LEN];
-            strcpy(rootpath, root);
-            dirChange(rootpath, findFileData.cFileName, 0);
-
-            conflict += mergecomfiles(path, path2, rootpath, comid, mode);
+            strcpy(subfilepath, src);
+            dirChange(subfilepath, findFileData.cFileName, 0);
+            conflict += copymerge(subfilepath, foldername, commitid);
         }
-        FindClose(hFind);
+        CloseHandle(hFind);
         return conflict;
     }
     else
     {
-        root++;
-        char tardir[DIRNAME_LEN];
-        strcpy(tardir, path2);
-        dirChange(tardir, root, 0);
-        if (GetFileAttributes(tardir) == INVALID_FILE_ATTRIBUTES || (GetFileAttributes(tdir) & FILE_ATTRIBUTE_DIRECTORY))
+        char *lastbs = strrchr(src, '\\');
+        char destfilepath[DATASTR_LEN];
+        strcpy(destfilepath, dest);
+        strcat(destfilepath, lastbs);
+
+        if (GetFileAttributes(destfilepath) == INVALID_FILE_ATTRIBUTES || (GetFileAttributes(destfilepath) & FILE_ATTRIBUTE_DIRECTORY))
         {
-            CopyFile(path1, tardir, 0);
+            CopyFile(src, destfilepath, 0);
             return 0;
         }
-        else if (mode == REPLACE)
-            return;
         else
         {
-            if (diff(path1, tardir))
+            if (diff(src, destfilepath))
                 return 1;
             else
                 return 0;
