@@ -16,6 +16,8 @@
 #define READ 2
 #define NO_REPLACE 2
 #define MERGE 4
+#define REVERT 5
+#define NOT_REVERT 6
 
 #define DATASTR_LEN 128
 #define DIRNAME_LEN 128
@@ -103,7 +105,7 @@ void loadCommits();
 void findHead();
 int checkstaged();
 void commit(char *, int, Commit *);
-void snapshot();
+void snapshot(char);
 int filelog();
 int checkInFilelog(char *);
 void cleanCommit(char *);
@@ -140,6 +142,8 @@ void findcomfiles(char *, char *, char *, char *, char);
 
 void merge(char *, char *);
 int copymerge(char *, char *, char *);
+
+void revert(char *, char *);
 
 int main(int argc, char *argv[])
 {
@@ -238,7 +242,7 @@ int main(int argc, char *argv[])
             {
                 int commitNum = filelog();
                 commit(argv[3], commitNum, NULL);
-                snapshot();
+                snapshot(NOT_REVERT);
             }
             else if (strcmp(argv[2], "-s") == 0)
             {
@@ -248,7 +252,7 @@ int main(int argc, char *argv[])
                 {
                     int commitNum = filelog();
                     commit(msg, commitNum, NULL);
-                    snapshot();
+                    snapshot(NOT_REVERT);
                 }
             }
         }
@@ -543,6 +547,7 @@ void init()
 
     FILE *localconfigs = fopen(".neogit\\localconfigs.neogit", "w");
     fwrite(data, 1, DATASTR_LEN, localconfigs);
+    fseek(configFile, DATASTR_LEN, SEEK_SET);
     fread(data, sizeof(char), DATASTR_LEN, configFile);
     fwrite(data, 1, DATASTR_LEN, localconfigs);
 
@@ -845,13 +850,12 @@ void loadCommits()
 
     int count = 0;
 
-    FILE *commitslog = fopen(dir, "r");
+    FILE *commitslog = fopen(dir, "rb");
 
     if (commitslog != NULL)
-        while (fread(commits + count, sizeof(Commit), 1, commitslog))
-            count++;
+        count = fread(commits, sizeof(Commit), MAX_COMMIT_NUM, commitslog);
 
-    for (int i = 0; i < commitCount; i++)
+    for (int i = 0; i < count; i++)
         if (commits[i].prevcomid != 0)
             commits[i].pervCommit = commits + (commits[i].prevcomid - 10000);
         else
@@ -927,14 +931,15 @@ void commit(char *msg, int num, Commit *merge)
     dirChange(dir, "localconfigs.neogit", 0);
     FILE *localconfigs = fopen(dir, "r");
     fread(&curCommit->authName, 1, DATASTR_LEN, localconfigs);
+    fseek(localconfigs, DATASTR_LEN, SEEK_SET);
     fread(&curCommit->authEmail, 1, DATASTR_LEN, localconfigs);
     fclose(localconfigs);
 
     strcpy(curCommit->msg, msg);
 
     dirChange(dir, "status.neogit", 1);
-    FILE *status = fopen(dir, "r+");
-    fread(&curCommit->branch, 1, DATASTR_LEN, status);
+    FILE *status = fopen(dir, "r");
+    fscanf(status, "%s", curCommit->branch);
     fclose(status);
 
     time(&curCommit->t);
@@ -948,7 +953,7 @@ void commit(char *msg, int num, Commit *merge)
 
     dirChange(dir, "commitslog.neogit", 1);
 
-    FILE *commitslog = fopen(dir, "a");
+    FILE *commitslog = fopen(dir, "ab");
 
     fwrite(curCommit, sizeof(Commit), 1, commitslog);
     head = curCommit;
@@ -985,7 +990,7 @@ int checkstaged()
     return 0;
 }
 
-void snapshot()
+void snapshot(char mode)
 {
     // setting dir to repo\.neogit\commits\#headcommit folder
     char dir[DIRNAME_LEN];
@@ -1002,7 +1007,7 @@ void snapshot()
     char reploc[DIRNAME_LEN];
     findNeogitRep(reploc);
 
-    if (head->pervCommit != NULL)
+    if (head->pervCommit != NULL && mode != REVERT)
     {
         // going to prevcom folder
         char prevCom[DIRNAME_LEN];
@@ -1105,12 +1110,18 @@ int filelog()
     findNeogitRep(dir);
     if (*dir == '\0')
         return 0;
+    dirChange(dir, "status.neogit", 0);
+    FILE *status = fopen(dir, "r");
+    char branch[DATASTR_LEN];
+    fgets(branch, DATASTR_LEN, status);
+    fclose(status);
+    dirChange(dir, branch, 1);
     dirChange(dir, "filelog.neogit", 0);
-    FILE *filelog = fopen(dir, "r+");
+    FILE *filelog = fopen(dir, "rb+");
     if (filelog == NULL)
-        filelog = fopen(dir, "w");
+        filelog = fopen(dir, "wb");
 
-    dirChange(dir, "stagedfiles.neogit", 1);
+    dirChange(dir, "stagedfiles.neogit", 2);
     FILE *stagedfiles = fopen(dir, "r+");
     if (stagedfiles == NULL)
         return 0;
@@ -1159,8 +1170,8 @@ int filelog()
     fclose(stagedfiles);
 
     dirChange(dir, "resetfiles.neogit", 1);
-    stagedfiles = fopen(dir, "w");
-    fclose(stagedfiles);
+    FILE *resetfiles = fopen(dir, "w");
+    fclose(resetfiles);
 
     return stagedFilesNum;
 }
@@ -1169,10 +1180,15 @@ int checkInFilelog(char *filepath)
 {
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
-
+    dirChange(dir, "status.neogit", 0);
+    FILE *status = fopen(dir, "r");
+    char branch[DATASTR_LEN];
+    fgets(branch, DATASTR_LEN, status);
+    fclose(status);
+    dirChange(dir, branch, 1);
     dirChange(dir, "filelog.neogit", 0);
 
-    FILE *filelog = fopen(dir, "r");
+    FILE *filelog = fopen(dir, "rb");
     int placement = 0;
     Fileinfo fileinfo;
     while (fread(&fileinfo, sizeof(Fileinfo), 1, filelog))
@@ -1180,7 +1196,6 @@ int checkInFilelog(char *filepath)
         if (strcmp(fileinfo.path, filepath) == 0)
             return placement;
         placement++;
-        fseek(filelog, placement * sizeof(fileinfo), SEEK_SET);
     }
     return -1;
 }
@@ -1212,7 +1227,7 @@ void wildcard(char *fileName, void(addset)(char *, char), char addmode)
     }
 }
 
-void cleanCommit(char *fileprevpath)
+void cleanCommit(char *fileprevpath) // is shit
 {
     // this funct deletes the files in old commits that now have been removed
     char reploc[DIRNAME_LEN];
@@ -1418,8 +1433,14 @@ void status(char *fileName)
             Y = 'A';
         else
         {
+            dirChange(dir, "status.neogit", 0);
+            FILE *status = fopen(dir, "r");
+            char branch[DATASTR_LEN];
+            fgets(branch, DATASTR_LEN, status);
+            fclose(status);
+            dirChange(dir, branch, 1);
             dirChange(dir, "filelog.neogit", 0);
-            FILE *filelog = fopen(dir, "r");
+            FILE *filelog = fopen(dir, "rb");
             Fileinfo fileinfo;
             fseek(filelog, logIdx * sizeof(Fileinfo), SEEK_SET);
             fread(&fileinfo, sizeof(Fileinfo), 1, filelog);
@@ -1452,9 +1473,14 @@ void statusD()
     findNeogitRep(dir);
     if (*dir == '\0')
         return;
-
+    dirChange(dir, "status.neogit", 0);
+    FILE *status = fopen(dir, "r");
+    char branch[DATASTR_LEN];
+    fgets(branch, DATASTR_LEN, status);
+    fclose(status);
+    dirChange(dir, branch, 1);
     dirChange(dir, "filelog.neogit", 0);
-    FILE *filelog = fopen(dir, "r");
+    FILE *filelog = fopen(dir, "rb");
     int placement = 0;
     Fileinfo fileinfo;
     while (fread(&fileinfo, sizeof(Fileinfo), 1, filelog))
@@ -1469,8 +1495,6 @@ void statusD()
                 X = '+';
             printf("\t%-55s : %c%c\n", fileinfo.path, X, Y);
         }
-        placement++;
-        fseek(filelog, placement * sizeof(fileinfo), SEEK_SET);
     }
 }
 
@@ -1491,7 +1515,7 @@ void writeAlias(char *name, char *cmd, char mode)
         dirChange(dir, "aliasfile.neogit", 1);
         puts(dir);
     }
-    FILE *aliasfile = fopen(dir, "a");
+    FILE *aliasfile = fopen(dir, "ab");
     fwrite(&alias, sizeof(Alias), 1, aliasfile);
     fclose(aliasfile);
 }
@@ -1501,7 +1525,7 @@ int exAlias(char *inp)
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
     dirChange(dir, "localalias.neogit", 0);
-    FILE *aliasfile = fopen(dir, "r");
+    FILE *aliasfile = fopen(dir, "rb");
     Alias alias;
     int place = 0;
     while (fread(&alias, sizeof(Alias), 1, aliasfile))
@@ -1513,13 +1537,11 @@ int exAlias(char *inp)
             system(cmd);
             return 1;
         }
-        place++;
-        fseek(aliasfile, place * sizeof(Alias), SEEK_SET);
     }
     fclose(aliasfile);
     GetModuleFileName(NULL, dir, DIRNAME_LEN);
     dirChange(dir, "aliasfile.neogit", 1);
-    aliasfile = fopen(dir, "r");
+    aliasfile = fopen(dir, "rb");
     while (fread(&alias, sizeof(Alias), 1, aliasfile))
     {
         if (strcmp(alias.aname, inp) == 0)
@@ -1692,7 +1714,6 @@ void checkoutid(char *id)
     strcpy(comfilepath, comfol);
     dirChange(comfilepath, "*", 0);
 
-    findFileData;
     hFind = FindFirstFile(comfilepath, &findFileData);
     FindNextFile(hFind, &findFileData);
     while (FindNextFile(hFind, &findFileData) != 0)
@@ -2229,7 +2250,7 @@ void merge(char *branch1, char *branch2) // perv commit of this commit needs to 
     char commsg[DATASTR_LEN];
     snprintf(commsg, DATASTR_LEN, "merging \'%s\' and \'%s\'.");
     commit(commsg, stagedFilesNum, NULL);
-    snapshot();
+    snapshot(NOT_REVERT);
 }
 
 int copymerge(char *src, char *dest, char *commitid)
@@ -2327,5 +2348,5 @@ void revert(char *id, char *msg)
     wildcard(reldir, add, '\0');
     int num = filelog();
     commit(msg, num, NULL);
-    snapshot();
+    snapshot(REVERT);
 }
