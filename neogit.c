@@ -138,6 +138,9 @@ int findtokenlen(char *, char *);
 void commitdiff(char *, char *);
 void findcomfiles(char *, char *, char *, char *, char);
 
+void merge(char *, char *);
+int copymerge(char *, char *, char *);
+
 int main(int argc, char *argv[])
 {
     loadCommits();
@@ -415,6 +418,10 @@ int main(int argc, char *argv[])
         }
         else
             INVCMD;
+    }
+    else if (strcmp(argv[1], "merge") == 0 && strcmp(argv[2], "-b") == 0 && argc == 5)
+    {
+        merge(argv[3], argv[4]);
     }
     else if (!exAlias(argv[1]))
         INVCMD;
@@ -861,7 +868,7 @@ void findHead()
         puts("ERROR: UNABLE TO FIND STATUS FILE!");
         return;
     }
-    fread(branch, 1, DATASTR_LEN, status);
+    fscanf(status, "%s", branch);
     fclose(status);
 
     dirChange(dir, branch, 1);
@@ -1190,6 +1197,7 @@ void wildcard(char *fileName, void(addset)(char *, char), char addmode)
 
 void cleanCommit(char *fileprevpath)
 {
+    // this funct deletes the files in old commits that now have been removed
     char reploc[DIRNAME_LEN];
     findNeogitRep(reploc);
     if (*reploc == '\0')
@@ -2138,7 +2146,7 @@ void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode)
     }
 }
 
-void merge(char *branch1, char *branch2)
+void merge(char *branch1, char *branch2) // perv commit of this commit needs to be corrected
 {
     char root[DIRNAME_LEN];
     int bsnum = findNeogitRep(root);
@@ -2149,6 +2157,7 @@ void merge(char *branch1, char *branch2)
     }
     *strrchr(root, '\\') = '\0';
 
+    // finding b1head and b1head folder dir
     char b1hdir[DIRNAME_LEN];
     char b1headid[DATASTR_LEN];
     findNeogitRep(b1hdir);
@@ -2160,12 +2169,13 @@ void merge(char *branch1, char *branch2)
     dirChange(b1hdir, b1headid, 0);
     fclose(branchhead);
 
+    // finding b2head and b2head folder dir
     char b2hdir[DIRNAME_LEN];
     char b2headid[DATASTR_LEN];
     findNeogitRep(b2hdir);
     dirChange(b2hdir, branch2, 0);
     dirChange(b2hdir, "branchhead.neogit", 0);
-    FILE *branchhead = fopen(b2hdir, "r");
+    branchhead = fopen(b2hdir, "r");
     fscanf(branchhead, "%s", b2headid);
     dirChange(b2hdir, "commits", 2);
     dirChange(b2hdir, b2headid, 0);
@@ -2176,12 +2186,14 @@ void merge(char *branch1, char *branch2)
     int conflict = copymerge(b2hdir, root, b2headid);
     if (conflict)
     {
-        puts("ERROR: CONFLICT! MERGE ABORTED!");
         char headid[DATASTR_LEN];
         sprintf(headid, "%d", head->id);
         checkoutid(headid);
+        puts("ERROR: CONFLICT! MERGE ABORTED!");
         return;
     }
+
+    head = &commits[atoi(b1headid) - 10000];
 
     char reldir[DIRNAME_LEN] = "*$";
     for (int i = 0; i < bsnum; i++)
@@ -2190,6 +2202,17 @@ void merge(char *branch1, char *branch2)
         sprintf(temp, "..\\%s", reldir);
         strcpy(reldir, temp);
     }
+    char branchName[DATASTR_LEN];
+    snprintf(branchName, DATASTR_LEN, "%s-%s", branch1, branch2);
+    createBranch(branchName);
+
+    wildcard(reldir, add, '\0');
+
+    int stagedFilesNum = filelog();
+    char commsg[DATASTR_LEN];
+    snprintf(commsg, DATASTR_LEN, "merging \'%s\' and \'%s\'.");
+    commit(commsg, stagedFilesNum, NULL);
+    snapshot();
 }
 
 int copymerge(char *src, char *dest, char *commitid)
