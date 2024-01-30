@@ -80,7 +80,7 @@ struct tag
 typedef struct tag Tag;
 
 void dirChange(char *, char *, int);
-void findNeogitRep(char *);
+int findNeogitRep(char *);
 int copydir(char *, char *, char);
 void wildcard(char *, void(char *, char), char);
 int isNum(char *);
@@ -478,21 +478,23 @@ void config(char mode, int type, char *data)
     }
 }
 
-void findNeogitRep(char *curLoc)
+int findNeogitRep(char *curLoc)
 {
     GetCurrentDirectory(DIRNAME_LEN, curLoc);
+    int bsnum = 0;
     while (1)
     {
         char *lastbs = strrchr(curLoc, '\\');
         strcat(curLoc, "\\.neogit");
         if (GetFileAttributes(curLoc) != INVALID_FILE_ATTRIBUTES && (GetFileAttributes(curLoc) & FILE_ATTRIBUTE_DIRECTORY) && (GetFileAttributes(curLoc) & FILE_ATTRIBUTE_HIDDEN))
-            return;
+            return bsnum;
         if (lastbs == NULL)
             break;
         *lastbs = '\0';
+        bsnum++;
     }
     *curLoc = '\0';
-    return;
+    return -1;
 }
 
 void init()
@@ -2139,7 +2141,7 @@ void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode)
 void merge(char *branch1, char *branch2)
 {
     char root[DIRNAME_LEN];
-    findNeogitRep(root);
+    int bsnum = findNeogitRep(root);
     if (*root == '\0')
     {
         puts("ERROR: NOT IN A NEOGIT REPO!");
@@ -2171,7 +2173,7 @@ void merge(char *branch1, char *branch2)
 
     checkoutid(b1headid);
 
-    int conflict = copymerge(b1hdir, b2hdir, b2headid);
+    int conflict = copymerge(b2hdir, root, b2headid);
     if (conflict)
     {
         puts("ERROR: CONFLICT! MERGE ABORTED!");
@@ -2181,7 +2183,13 @@ void merge(char *branch1, char *branch2)
         return;
     }
 
-    // add and commit repo
+    char reldir[DIRNAME_LEN] = "*$";
+    for (int i = 0; i < bsnum; i++)
+    {
+        char temp[DIRNAME_LEN] = "";
+        sprintf(temp, "..\\%s", reldir);
+        strcpy(reldir, temp);
+    }
 }
 
 int copymerge(char *src, char *dest, char *commitid)
