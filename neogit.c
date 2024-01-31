@@ -49,6 +49,17 @@ Commit commits[MAX_COMMIT_NUM];
 int commitCount;
 Commit *head = NULL;
 
+struct stash
+{
+    char msg[DATASTR_LEN];
+    char branch[DATASTR_LEN];
+    char hash[6];
+};
+typedef struct stash Stash;
+
+Stash stashs[MAX_COMMIT_NUM];
+int stashNum;
+
 struct fileinfo
 {
     char path[DIRNAME_LEN];
@@ -144,6 +155,11 @@ void merge(char *, char *);
 int copymerge(char *, char *, char *);
 
 void revert(char *, char *);
+
+int loadStash();
+void push(char *);
+void findnexthash(char *, char *);
+void stashList();
 
 int main(int argc, char *argv[])
 {
@@ -443,6 +459,31 @@ int main(int argc, char *argv[])
         }
         else
             revert(argv[2], NULL);
+    }
+    else if (strcmp(argv[1], "stash") == 0 && argc > 2)
+    {
+        if (!loadStash())
+        {
+            if (strcmp(argv[2], "push") == 0)
+            {
+                if (argc == 5 && strcmp(argv[3], "-m") == 0)
+                {
+                    push(argv[4]);
+                }
+                else if (argc == 3)
+                {
+                    push("");
+                }
+                else
+                    INVCMD;
+            }
+            else if (strcmp(argv[2], "list") == 0 && argc == 3)
+            {
+                stashList();
+            }
+            else
+                INVCMD;
+        }
     }
     else if (!exAlias(argv[1]))
         INVCMD;
@@ -1227,7 +1268,7 @@ void wildcard(char *fileName, void(addset)(char *, char), char addmode)
     }
 }
 
-void cleanCommit(char *fileprevpath) // is shit
+void cleanCommit(char *fileprevpath) // made changes here
 {
     // this funct deletes the files in old commits that now have been removed
     char reploc[DIRNAME_LEN];
@@ -1618,7 +1659,7 @@ void createBranch(char *branchName)
     dirChange(dir, "status.neogit", 0);
     FILE *status = fopen(dir, "r");
     char branch[DATASTR_LEN];
-    fgets(branch, DATASTR_LEN, branch);
+    fgets(branch, DATASTR_LEN, status);
     fclose(status);
     status = fopen(dir, "w");
     fprintf(status, "%s", branchName);
@@ -2336,7 +2377,7 @@ int copymerge(char *src, char *dest, char *commitid)
     }
 }
 
-void revert(char *id, char *msg)
+void revert(char *id, char *msg) // nee\ds dubugging
 {
     char dir[DIRNAME_LEN];
     int bsnum = findNeogitRep(dir);
@@ -2371,16 +2412,124 @@ void revert(char *id, char *msg)
     checkoutid(id);
     wildcard(reldir, add, '\0');
 
-    dirChange(dir, commits[atoi(id) - 10000].branch, 2);
-    dirChange(dir, "filelog.neogit", 0);
-    FILE *filelog = fopen(dir, "rb");
-    Fileinfo fileinfo;
-    while (fread(&fileinfo, sizeof(fileinfo), 1, filelog))
-    {
-        add(file)
-    }
+    // dirChange(dir, commits[atoi(id) - 10000].branch, 2);
+    // dirChange(dir, "filelog.neogit", 0);
+    // FILE *filelog = fopen(dir, "rb");
+    // Fileinfo fileinfo;
+    // while (fread(&fileinfo, sizeof(fileinfo), 1, filelog))
+    // {
+    //     add(file)
+    // }
 
     int num = filelog();
     commit(msg, num, NULL);
     snapshot(REVERT);
+}
+
+int loadStash()
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return 1;
+    }
+
+    dirChange(dir, "stashlog.neogit", 0);
+
+    FILE *stashlog = fopen(dir, "rb");
+    if (stashlog == NULL)
+    {
+        stashNum = 0;
+        return 0;
+    }
+
+    stashNum = fread(stashs, sizeof(Stash), MAX_COMMIT_NUM, stashlog);
+    return 0;
+}
+
+void push(char *msg)
+{
+    Stash *curStash = stashs + stashNum;
+
+    if (stashNum == 0)
+        strcpy(curStash->hash, "aaaaa");
+    else
+        findnexthash(stashs[stashNum - 1].hash, curStash->hash);
+
+    strcpy(curStash->msg, msg);
+
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    char reploc[DIRNAME_LEN];
+    strcpy(reploc, dir);
+    dirChange(dir, "status.neogit", 0);
+    FILE *status = fopen(dir, "r");
+    fgets(curStash->branch, DIRNAME_LEN, status);
+    fclose(status);
+
+    dirChange(dir, "commits", 1);
+    dirChange(dir, curStash->hash, 0);
+    CreateDirectory(dir, NULL);
+
+    char filepath[DIRNAME_LEN];
+    strcpy(filepath, reploc);
+    dirChange(filepath, "*", 1);
+
+    WIN32_FIND_DATA findFileData;
+    HANDLE hFind = FindFirstFile(filepath, &findFileData);
+    FindNextFile(hFind, &findFileData);
+    while (FindNextFile(hFind, &findFileData) != 0)
+    {
+        if (strcmp(findFileData.cFileName, ".neogit") == 0)
+            continue;
+        strcpy(filepath, reploc);
+        dirChange(filepath, findFileData.cFileName, 1);
+        copydir(filepath, dir, COPY_ALL);
+    }
+    CloseHandle(hFind);
+
+    dirChange(dir, "stagedfiles.neogit", 2);
+    FILE *stagedfiles = fopen(dir, "w");
+    fclose(stagedfiles);
+
+    dirChange(dir, "stashlog.neogit", 1);
+    FILE *stashlog = fopen(dir, "wb");
+    fwrite(stashs, sizeof(Stash), ++stashNum, stashlog);
+    fclose(stashlog);
+}
+
+void findnexthash(char *pervhash, char *nexthash)
+{
+    strcpy(nexthash, pervhash);
+    nexthash[4]++;
+    for (int i = 4; i >= 0; i--)
+    {
+        if (nexthash[i] == 'z' + 1 && i != 0)
+        {
+            nexthash[i] = 'a';
+            nexthash[i - 1]++;
+        }
+        else if (i == 0)
+            nexthash[i] = 'a';
+    }
+}
+
+void stashList()
+{
+    if (stashNum == 0)
+    {
+        puts("ERROR: NO STASH ENTRY FOUND!");
+        return;
+    }
+    for (int i = 0; i < stashNum; i++)
+    {
+        Stash *stash = stashs + stashNum - i - 1;
+        printf("\tStash entry #%d:\n", i);
+        printf("\t\tOn branch \'%s\'.\n", stash->branch);
+        if (*stash->msg != '\0')
+            printf("\t\t\"%s\"", stash->msg);
+        puts("");
+    }
 }
