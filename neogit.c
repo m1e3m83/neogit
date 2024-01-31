@@ -18,6 +18,8 @@
 #define MERGE 4
 #define REVERT 5
 #define NOT_REVERT 6
+#define STASH 7
+#define COMMIT 8
 
 #define DATASTR_LEN 128
 #define DIRNAME_LEN 128
@@ -54,6 +56,7 @@ struct stash
     char msg[DATASTR_LEN];
     char branch[DATASTR_LEN];
     char hash[6];
+    char comid[6];
 };
 typedef struct stash Stash;
 
@@ -148,8 +151,8 @@ int diff(char *, char *);
 void printline(char *, int, int);
 char *findprintable(char *);
 int findtokenlen(char *, char *);
-void commitdiff(char *, char *);
-void findcomfiles(char *, char *, char *, char *, char);
+void commitdiff(char *, char *, char);
+void findcomfiles(char *, char *, char *, char *, char, char);
 
 void merge(char *, char *);
 int copymerge(char *, char *, char *);
@@ -160,6 +163,7 @@ int loadStash();
 void push(char *);
 void findnexthash(char *, char *);
 void stashList();
+void stashshow(char *);
 
 int main(int argc, char *argv[])
 {
@@ -434,7 +438,7 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(argv[2], "-c") == 0 && argc == 5)
         {
-            commitdiff(argv[3], argv[4]);
+            commitdiff(argv[3], argv[4], COMMIT);
         }
         else
             INVCMD;
@@ -480,6 +484,10 @@ int main(int argc, char *argv[])
             else if (strcmp(argv[2], "list") == 0 && argc == 3)
             {
                 stashList();
+            }
+            else if (strcmp(argv[2], "show") == 0 && argc == 4)
+            {
+                stashshow(argv[3]);
             }
             else
                 INVCMD;
@@ -2170,7 +2178,7 @@ void setTextColor(int colorCode)
     SetConsoleTextAttribute(hConsole, colorCode);
 }
 
-void commitdiff(char *com1, char *com2)
+void commitdiff(char *com1, char *com2, char exmode)
 {
     char dir1[DIRNAME_LEN];
     findNeogitRep(dir1);
@@ -2183,7 +2191,7 @@ void commitdiff(char *com1, char *com2)
     dirChange(dir1, com1, 0);
     if (GetFileAttributes(dir1) == INVALID_FILE_ATTRIBUTES || !(GetFileAttributes(dir1) & FILE_ATTRIBUTE_DIRECTORY))
     {
-        puts("ERROR: INVALID COMMIT ID!");
+        puts("ERROR: INVALID COMMIT ID/STASH INDEX!");
         return;
     }
     char root[DIRNAME_LEN] = "";
@@ -2194,15 +2202,15 @@ void commitdiff(char *com1, char *com2)
     dirChange(dir2, com2, 0);
     if (GetFileAttributes(dir1) == INVALID_FILE_ATTRIBUTES || !(GetFileAttributes(dir1) & FILE_ATTRIBUTE_DIRECTORY))
     {
-        puts("ERROR: INVALID COMMIT ID!");
+        puts("ERROR: INVALID COMMIT ID");
         return;
     }
 
-    findcomfiles(dir1, dir2, root, com1, NO_REPLACE);
-    findcomfiles(dir2, dir1, root, com2, REPLACE);
+    findcomfiles(dir1, dir2, root, com1, NO_REPLACE, exmode);
+    findcomfiles(dir2, dir1, root, com2, REPLACE, COMMIT);
 }
 
-void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode)
+void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode, char exmode)
 {
     if ((GetFileAttributes(path1) & FILE_ATTRIBUTE_DIRECTORY) && (GetFileAttributes(path1) != INVALID_FILE_ATTRIBUTES))
     {
@@ -2221,7 +2229,7 @@ void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode)
             strcpy(rootpath, root);
             dirChange(rootpath, findFileData.cFileName, 0);
 
-            findcomfiles(path, path2, rootpath, comid, mode);
+            findcomfiles(path, path2, rootpath, comid, mode, exmode);
         }
         FindClose(hFind);
         return;
@@ -2234,7 +2242,10 @@ void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode)
         dirChange(tdir, root, 0);
         if (GetFileAttributes(tdir) == INVALID_FILE_ATTRIBUTES || (GetFileAttributes(tdir) & FILE_ATTRIBUTE_DIRECTORY))
         {
-            printf("Was in repo exclusively in commit %s\n", comid);
+            if (exmode == COMMIT)
+                printf("Exclusively in commit %s\n", comid);
+            else if (exmode == STASH)
+                puts("Exclusively in stash:");
             printf("    ");
             puts(root);
             return;
@@ -2469,6 +2480,8 @@ void push(char *msg)
     fgets(curStash->branch, DIRNAME_LEN, status);
     fclose(status);
 
+    snprintf(curStash->comid, 6, "%d", head->id);
+
     dirChange(dir, "commits", 1);
     dirChange(dir, curStash->hash, 0);
     CreateDirectory(dir, NULL);
@@ -2532,4 +2545,13 @@ void stashList()
             printf("\t\t\"%s\"", stash->msg);
         puts("");
     }
+}
+
+void stashshow(char *idxx)
+{
+    int idx = 0;
+    sscanf(idxx, "%d", &idx);
+    puts(stashs[stashNum - idx - 1].hash);
+    puts(stashs[stashNum - idx - 1].comid);
+    commitdiff(stashs[stashNum - idx - 1].hash, stashs[stashNum - idx - 1].comid, STASH);
 }
