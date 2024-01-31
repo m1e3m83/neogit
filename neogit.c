@@ -164,6 +164,7 @@ void push(char *);
 void findnexthash(char *, char *);
 void stashList();
 void stashshow(char *);
+void stashPop();
 
 int main(int argc, char *argv[])
 {
@@ -488,6 +489,10 @@ int main(int argc, char *argv[])
             else if (strcmp(argv[2], "show") == 0 && argc == 4)
             {
                 stashshow(argv[3]);
+            }
+            else if (strcmp(argv[2], "pop") == 0 && argc == 3)
+            {
+                stashPop();
             }
             else
                 INVCMD;
@@ -2333,7 +2338,6 @@ int copymerge(char *src, char *dest, char *commitid)
 {
     if (GetFileAttributes(src) == INVALID_FILE_ATTRIBUTES)
     {
-        fputs("ERROR: INVALID COMMIT ID", stdout);
         return 1;
     }
     else if (GetFileAttributes(src) & FILE_ATTRIBUTE_DIRECTORY)
@@ -2554,4 +2558,38 @@ void stashshow(char *idxx)
     puts(stashs[stashNum - idx - 1].hash);
     puts(stashs[stashNum - idx - 1].comid);
     commitdiff(stashs[stashNum - idx - 1].hash, stashs[stashNum - idx - 1].comid, STASH);
+}
+
+void stashPop() // checks out ot head if faced conflict
+{
+    char root[DIRNAME_LEN];
+    int bsnum = findNeogitRep(root);
+    if (*root == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return;
+    }
+    *strrchr(root, '\\') = '\0';
+
+    Stash *stash = stashs + stashNum - 1;
+
+    char sdir[DIRNAME_LEN];
+    findNeogitRep(sdir);
+    dirChange(sdir, "commits", 0);
+    dirChange(sdir, stash->hash, 0);
+
+    int conflict = copymerge(sdir, root, stash->hash);
+    if (conflict)
+    {
+        char headid[DATASTR_LEN];
+        sprintf(headid, "%d", head->id);
+        checkoutid(headid);
+        puts("ERROR: CONFLICT! POP OPORATION ABORTED!");
+        return;
+    }
+
+    dirChange(sdir, "stashlog.neogit", 2);
+    FILE *stashlog = fopen(sdir, "wb");
+    fwrite(commits, sizeof(Stash), stashNum - 1, stashlog);
+    fclose(stashlog);
 }
