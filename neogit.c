@@ -166,6 +166,9 @@ void stashList();
 void stashshow(char *);
 void stashPop();
 
+void grep(char *, char *, char, char *);
+void searchForWord(char *, char *, char);
+
 int main(int argc, char *argv[])
 {
     loadCommits();
@@ -494,6 +497,28 @@ int main(int argc, char *argv[])
             {
                 stashPop();
             }
+            else
+                INVCMD;
+        }
+    }
+    else if (strcmp(argv[1], "grep") == 0 && argc > 5)
+    {
+        if (argc > 5 && strcmp(argv[2], "-f") == 0 && strcmp(argv[4], "-p") == 0)
+        {
+            if (argc == 9 && strcmp(argv[6], "-c") == 0 && strcmp(argv[8], "-n") == 0)
+            {
+                grep(argv[3], argv[5], 1, argv[7]);
+            }
+            else if (argc == 8 && strcmp(argv[6], "-c") == 0)
+            {
+                grep(argv[3], argv[5], 0, argv[7]);
+            }
+            else if (argc == 7 && strcmp(argv[6], "-n") == 0)
+            {
+                grep(argv[3], argv[5], 1, NULL);
+            }
+            else if (argc == 6)
+                grep(argv[3], argv[5], 0, NULL);
             else
                 INVCMD;
         }
@@ -2592,4 +2617,84 @@ void stashPop() // checks out ot head if faced conflict
     FILE *stashlog = fopen(sdir, "wb");
     fwrite(commits, sizeof(Stash), stashNum - 1, stashlog);
     fclose(stashlog);
+}
+
+void searchForWord(char *path, char *word, char printlineNum)
+{
+    if (GetFileAttributes(path) == INVALID_FILE_ATTRIBUTES || GetFileAttributes(path) & FILE_ATTRIBUTE_DIRECTORY)
+    {
+        puts("ERROR: INVALID FILE");
+        return;
+    }
+
+    FILE *file = fopen(path, "r");
+
+    int wlen = strlen(word);
+    char line[DATASTR_LEN];
+    int lineNum = 1;
+    while (fgets(line, DATASTR_LEN, file))
+    {
+        strtok(line, "\n");
+        char *ptr = line;
+        while (*ptr != '\0')
+        {
+            if (strncmp(ptr, word, wlen) == 0 && (ptr == line || ptr[-1] == ' ') && (ptr[wlen] == ' ' || ptr[wlen] == '\0'))
+            {
+                int llen = strlen(line);
+                if (ptr != line)
+                    ptr[-1] = '\0';
+
+                int lastword = 0;
+                if (ptr[wlen] == '\0')
+                    lastword = 1;
+                ptr[wlen] = '\0';
+
+                if (printlineNum)
+                    printf("In line %d:", lineNum);
+
+                if (ptr != line)
+                    printf(" %s ", line);
+                else
+                    printf(" ");
+
+                setTextColor(GREEN);
+                printf("%s", ptr);
+                setTextColor(WHITE);
+
+                if (!lastword)
+                    printf(" %s\n", &ptr[wlen + 1]);
+                else
+                    printf("\n");
+
+                if (ptr != line)
+                    ptr[-1] = ' ';
+                if (!lastword)
+                    ptr[wlen] = ' ';
+            }
+            ptr++;
+        }
+        lineNum++;
+    }
+    fclose(file);
+}
+
+void grep(char *file, char *word, char printlineNum, char *commitid)
+{
+    char dir[DIRNAME_LEN];
+    findNeogitRep(dir);
+    if (*dir == '\0')
+    {
+        puts("ERROR: NOT IN A NEOGIT REPO!");
+        return;
+    }
+
+    if (commitid != NULL)
+    {
+        dirChange(dir, "commits", 0);
+        dirChange(dir, commitid, 0);
+        dirChange(dir, file, 0);
+        searchForWord(dir, word, printlineNum);
+        return;
+    }
+    searchForWord(file, word, printlineNum);
 }
