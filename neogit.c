@@ -1237,8 +1237,8 @@ void cleanCommit(char *fileprevpath) // is shit
     char *add = strrchr(reploc, '\\');
     *add = '\0';
     add = strrchr(reploc, '\\');
-    char *mark = strstr(fileprevpath, add);
-    mark += strlen(add);
+    char *mark = strstr(fileprevpath, reploc);
+    mark += strlen(reploc);
 
     char dir[DIRNAME_LEN];
     findNeogitRep(dir);
@@ -1481,7 +1481,6 @@ void statusD()
     dirChange(dir, branch, 1);
     dirChange(dir, "filelog.neogit", 0);
     FILE *filelog = fopen(dir, "rb");
-    int placement = 0;
     Fileinfo fileinfo;
     while (fread(&fileinfo, sizeof(Fileinfo), 1, filelog))
     {
@@ -1617,9 +1616,18 @@ void createBranch(char *branchName)
     }
 
     dirChange(dir, "status.neogit", 0);
-    FILE *status = fopen(dir, "w");
+    FILE *status = fopen(dir, "r");
+    char branch[DATASTR_LEN];
+    fgets(branch, DATASTR_LEN, branch);
+    fclose(status);
+    status = fopen(dir, "w");
     fprintf(status, "%s", branchName);
     fclose(status);
+
+    char srcdir[DIRNAME_LEN];
+    strcpy(srcdir, dir);
+    dirChange(srcdir, branch, 1);
+    dirChange(srcdir, "filelog.neogit", 0);
 
     dirChange(dir, branchName, 1);
     CreateDirectory(dir, NULL);
@@ -1628,6 +1636,10 @@ void createBranch(char *branchName)
     FILE *branchhead = fopen(dir, "w");
     fprintf(branchhead, "%d", head->id);
     fclose(branchhead);
+
+    dirChange(dir, "filelog.neogit", 1);
+
+    CopyFile(srcdir, dir, 1);
 }
 
 void branch()
@@ -1896,13 +1908,13 @@ void showtag(char *name)
     }
 }
 
-int diff(char *file1dir, char *file2dir)
+int diff(char *file1dir, char *file2dir) // is buggy when given empty files
 {
     FILE *file1 = fopen(file1dir, "r");
     FILE *file2 = fopen(file2dir, "r");
 
-    char l1[DATASTR_LEN];
-    char l2[DATASTR_LEN];
+    char l1[DATASTR_LEN] = "";
+    char l2[DATASTR_LEN] = "";
 
     int line1num = 0;
     int line2num = 0;
@@ -1922,30 +1934,42 @@ int diff(char *file1dir, char *file2dir)
             *strrchr(l2, '\n') = '\0';
         char *w2 = findprintable(l2);
 
+        int br = 0;
         while (w1 == NULL)
         {
-            if (fgets(l1, DATASTR_LEN, file1))
+            if (!feof(file2))
             {
+                fgets(l1, DATASTR_LEN, file1);
                 if (strrchr(l1, '\n') != NULL)
                     *strrchr(l1, '\n') = '\0';
                 w1 = findprintable(l1);
                 line1num++;
             }
             else
+            {
+                br = 1;
                 break;
+            }
         }
         while (w2 == NULL)
         {
-            if (fgets(l2, DATASTR_LEN, file2))
+            if (!feof(file2))
             {
+                fgets(l2, DATASTR_LEN, file2);
                 if (strrchr(l2, '\n') != NULL)
                     *strrchr(l2, '\n') = '\0';
                 w2 = findprintable(l2);
                 line2num++;
             }
             else
+            {
+                br = 1;
                 break;
+            }
         }
+        if (br)
+            break;
+
         int wordnum = -1;
         int lastdiffword = -1;
         do
@@ -2184,7 +2208,7 @@ void findcomfiles(char *path1, char *path2, char *root, char *comid, char mode)
     }
 }
 
-void merge(char *branch1, char *branch2) // perv commit of this commit needs to be corrected
+void merge(char *branch1, char *branch2) // perv commit of this commit needs to be corrected msg is wrong
 {
     char root[DIRNAME_LEN];
     int bsnum = findNeogitRep(root);
@@ -2346,6 +2370,16 @@ void revert(char *id, char *msg)
 
     checkoutid(id);
     wildcard(reldir, add, '\0');
+
+    dirChange(dir, commits[atoi(id) - 10000].branch, 2);
+    dirChange(dir, "filelog.neogit", 0);
+    FILE *filelog = fopen(dir, "rb");
+    Fileinfo fileinfo;
+    while (fread(&fileinfo, sizeof(fileinfo), 1, filelog))
+    {
+        add(file)
+    }
+
     int num = filelog();
     commit(msg, num, NULL);
     snapshot(REVERT);
