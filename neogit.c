@@ -247,7 +247,7 @@ int main(int argc, char *argv[])
                 if (strrchr(argv[i], '$') != NULL)
                     wildcard(argv[i], reset, '\0');
                 else
-                    add(argv[i], '\0');
+                    reset(argv[i], '\0');
             }
         }
         else
@@ -262,13 +262,13 @@ int main(int argc, char *argv[])
     {
         if (checkstaged())
         {
-            if (strcmp(argv[2], "-m") == 0)
+            if (argc > 1 && strcmp(argv[2], "-m") == 0)
             {
                 int commitNum = filelog();
                 commit(argv[3], commitNum, NULL);
                 snapshot(NOT_REVERT);
             }
-            else if (strcmp(argv[2], "-s") == 0)
+            else if (argc > 2 && strcmp(argv[2], "-s") == 0)
             {
                 char msg[DIRNAME_LEN];
                 int sfound = findShortcut(argv[3], msg, READ);
@@ -279,11 +279,13 @@ int main(int argc, char *argv[])
                     snapshot(NOT_REVERT);
                 }
             }
+            else
+                INVCMD;
         }
         else
             puts("ERROR: NO FILE IS STAGED!");
     }
-    else if (strcmp(argv[1], "set") == 0 && strcmp(argv[2], "-m") == 0 && strcmp(argv[4], "-s") == 0 && argc == 6)
+    else if (argc == 6 && strcmp(argv[1], "set") == 0 && strcmp(argv[2], "-m") == 0 && strcmp(argv[4], "-s") == 0)
     {
         set(argv[5], argv[3]);
     }
@@ -1479,17 +1481,17 @@ void status(char *fileName)
     }
     else if ((GetFileAttributes(fileName) & FILE_ATTRIBUTE_DIRECTORY))
     {
-        dirChange(fileName, "*", 0);
+        char path[DIRNAME_LEN];
+        strcpy(path, fileName);
+        dirChange(path, "*", 0);
 
         WIN32_FIND_DATA findFileData;
-        HANDLE hFind = FindFirstFile(fileName, &findFileData);
+        HANDLE hFind = FindFirstFile(path, &findFileData);
         FindNextFile(hFind, &findFileData);
         while (FindNextFile(hFind, &findFileData) != 0)
         {
             if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0 && strcmp(findFileData.cFileName, ".neogit") != 0)
             {
-                char path[DIRNAME_LEN];
-                strcpy(path, fileName);
                 dirChange(path, findFileData.cFileName, 1);
 
                 status(path);
@@ -1643,7 +1645,7 @@ void set(const char *sname, const char *msg)
         return;
     }
     dirChange(dir, "shortcuts.neogit", 0);
-    FILE *shortcuts = fopen(dir, "a");
+    FILE *shortcuts = fopen(dir, "ab");
     Shortcut shortcut;
     strcpy(shortcut.sname, sname);
     strcpy(shortcut.msg, msg);
@@ -1662,12 +1664,12 @@ int findShortcut(const char *sname, char *msg, char mode)
         return 0;
     }
     dirChange(dir, "shortcuts.neogit", 0);
-    FILE *shortcuts = fopen(dir, "r+");
+    FILE *shortcuts = fopen(dir, "rb+");
     while (fread(&shortcut, sizeof(Shortcut), 1, shortcuts))
     {
         if (strcmp(shortcut.sname, sname) == 0)
         {
-            if (strcmp(shortcut.msg, EMPTY_STRING) == 0 && mode == READ)
+            if (strcmp(shortcut.msg, EMPTY_STRING) == 0)
                 continue;
 
             if (mode == REPLACE)
@@ -1915,27 +1917,39 @@ void tag(char *name, char *msg, char *comid, char mode)
     }
 
     Tag lestag[MAX_COMMIT_NUM];
-    int num = fread(lestag, sizeof(Tag), MAX_COMMIT_NUM, tags);
+    int tagNum = fread(lestag, sizeof(Tag), MAX_COMMIT_NUM, tags);
 
     int i = 0;
-    for (; i < num; i++)
+    for (; i < tagNum; i++)
     {
         if (strcmp(tag.name, lestag[i].name) <= 0)
             break;
     }
 
     fclose(tags);
+
+    if (mode == REPLACE && i == tagNum)
+    {
+        puts("ERROR: NO TAG FOUND WITH SUCH NAME!");
+        return;
+    }
+
     tags = fopen(dir, "wb");
 
-    if (i == 0)
-        fwrite(&tag, sizeof(Tag), 1, tags);
-    for (int j = 0; j < num; j++)
-    {
-        if (!(mode == REPLACE && strcmp(lestag[i].name, tag.name) == 0)) // bug
-            fwrite(lestag + j, sizeof(Tag), 1, tags);
-        if (j + 1 == i)
-            fwrite(&tag, sizeof(Tag), 1, tags);
-    }
+    // if (i == 0)
+    //     fwrite(&tag, sizeof(Tag), 1, tags);
+    // for (int j = 0; j < tagNum; j++)
+    // {
+    //     if (mode != REPLACE || strcmp(lestag[i].name, tag.name) != 0) // bug
+    //         fwrite(lestag + j, sizeof(Tag), 1, tags);
+    //     if (j + 1 == i)
+    //         fwrite(&tag, sizeof(Tag), 1, tags);
+    // }
+    fwrite(lestag, sizeof(Tag), i, tags);
+    fwrite(&tag, sizeof(Tag), 1, tags);
+    if (mode == REPLACE)
+        i++;
+    fwrite(lestag + i, sizeof(Tag), tagNum - i, tags);
 
     fclose(tags);
 }
@@ -2000,6 +2014,8 @@ int diff(char *file1dir, char *file2dir) // is buggy when given empty files
     int diffnum = 0;
     while (!feof(file1) && !feof(file2))
     {
+        int linediff = 0;
+
         fgets(l1, DATASTR_LEN, file1);
         fgets(l2, DATASTR_LEN, file2);
         line1num++;
@@ -2016,7 +2032,7 @@ int diff(char *file1dir, char *file2dir) // is buggy when given empty files
         int br = 0;
         while (w1 == NULL)
         {
-            if (!feof(file2))
+            if (!feof(file1))
             {
                 fgets(l1, DATASTR_LEN, file1);
                 if (strrchr(l1, '\n') != NULL)
@@ -2026,6 +2042,18 @@ int diff(char *file1dir, char *file2dir) // is buggy when given empty files
             }
             else
             {
+                if (w2 != NULL)
+                {
+                    puts(">>>>>>");
+                    printf("%s -> line %d :\n    ", file2dir, line2num);
+
+                    setTextColor(GREEN);
+                    printline(l2, -1, -1);
+                    setTextColor(WHITE);
+                    puts("<<<<<<");
+                    puts("");
+                    diffnum++;
+                }
                 br = 1;
                 break;
             }
@@ -2042,6 +2070,18 @@ int diff(char *file1dir, char *file2dir) // is buggy when given empty files
             }
             else
             {
+                if (w1 != NULL)
+                {
+                    puts(">>>>>>");
+                    printf("%s -> line %d :\n    ", file2dir, line2num);
+
+                    setTextColor(GREEN);
+                    printline(l1, -1, -1);
+                    setTextColor(WHITE);
+                    puts("<<<<<<");
+                    puts("");
+                    diffnum++;
+                }
                 br = 1;
                 break;
             }
@@ -2056,12 +2096,12 @@ int diff(char *file1dir, char *file2dir) // is buggy when given empty files
             wordnum++;
             if (w2 == NULL || (w1 != NULL && strncmp(w1, w2, findtokenlen(w1, w2)) != 0))
             {
-                diffnum++;
+                linediff++;
                 lastdiffword = wordnum;
             }
             else if (w1 == NULL || strncmp(w1, w2, findtokenlen(w1, w2)) != 0)
             {
-                diffnum++;
+                linediff++;
                 lastdiffword = wordnum;
             }
 
@@ -2072,7 +2112,7 @@ int diff(char *file1dir, char *file2dir) // is buggy when given empty files
 
         } while (w1 || w2);
 
-        if (diffnum > 0)
+        if (linediff > 0)
         {
             puts(">>>>>>");
             printf("%s -> line %d :\n    ", file1dir, line1num);
@@ -2089,8 +2129,8 @@ int diff(char *file1dir, char *file2dir) // is buggy when given empty files
             puts("<<<<<<");
             puts("");
         }
+        diffnum += linediff;
     }
-
     char line[DATASTR_LEN];
 
     while (fgets(line, DATASTR_LEN, file1))
@@ -2354,7 +2394,7 @@ void merge(char *branch1, char *branch2) // perv commit of this commit needs to 
 
     int stagedFilesNum = filelog();
     char commsg[DATASTR_LEN];
-    snprintf(commsg, DATASTR_LEN, "merging \'%s\' and \'%s\'.");
+    snprintf(commsg, DATASTR_LEN, "merging \'%s\' and \'%s\'.", branch1, branch2);
     commit(commsg, stagedFilesNum, NULL);
     snapshot(NOT_REVERT);
 }
@@ -2538,8 +2578,12 @@ void push(char *msg)
 
     dirChange(dir, "stashlog.neogit", 1);
     FILE *stashlog = fopen(dir, "wb");
-    fwrite(stashs, sizeof(Stash), ++stashNum, stashlog);
+    fwrite(stashs, sizeof(Stash), stashNum + 1, stashlog);
     fclose(stashlog);
+
+    char headid[DATASTR_LEN];
+    sprintf(headid, "%d", head->id);
+    checkoutid(headid);
 }
 
 void findnexthash(char *pervhash, char *nexthash)
@@ -2580,12 +2624,10 @@ void stashshow(char *idxx)
 {
     int idx = 0;
     sscanf(idxx, "%d", &idx);
-    puts(stashs[stashNum - idx - 1].hash);
-    puts(stashs[stashNum - idx - 1].comid);
     commitdiff(stashs[stashNum - idx - 1].hash, stashs[stashNum - idx - 1].comid, STASH);
 }
 
-void stashPop() // checks out ot head if faced conflict
+void stashPop() // checks out out head if faced conflict
 {
     char root[DIRNAME_LEN];
     int bsnum = findNeogitRep(root);
@@ -2615,7 +2657,7 @@ void stashPop() // checks out ot head if faced conflict
 
     dirChange(sdir, "stashlog.neogit", 2);
     FILE *stashlog = fopen(sdir, "wb");
-    fwrite(commits, sizeof(Stash), stashNum - 1, stashlog);
+    fwrite(stashs, sizeof(Stash), stashNum - 1, stashlog);
     fclose(stashlog);
 }
 

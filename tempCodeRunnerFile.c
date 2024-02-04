@@ -1,2 +1,2 @@
-    puts(dir1);
-    puts(dir2);
+
+        while (w1 == NULL)
