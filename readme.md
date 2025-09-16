@@ -33,7 +33,7 @@ This project was completed as part of the Fundermentals of Programming course in
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/neogit.git
+   git clone https://github.com/m1e3m83/neogit
    cd neogit
    ```
 
