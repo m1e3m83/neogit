@@ -1,3 +1,4 @@
 configfile.txt
 *.exe
 *.neogit
+temp*
