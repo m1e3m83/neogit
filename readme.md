@@ -4,6 +4,8 @@ NeoGit is a lightweight, educational reimplementation of Git written in **C**.
 It provides a simplified version control system (VCS) that mimics Git’s functionality such as commits, branches, merges, stashes, and tags.
 
 This project was completed as part of the Fundermentals of Programming course in Sharif University of Technology, Feb 2024.
+
+
 ---
 
 ## Features
